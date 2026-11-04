@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vocab Drill</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f6f4fb;--fg:#1d1a2b;--card:#fff;--mut:#6b6780;--line:#dcd8ea;--pri:#46178f;--r:#e21b3c;--b:#1368ce;--y:#c98f00;--g:#26890c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17132a;--fg:#f1eefc;--card:#231d3d;--mut:#a39dc0;--line:#3a3260;--pri:#9b6bf0}}
+:root[data-theme="dark"]{--bg:#17132a;--fg:#f1eefc;--card:#231d3d;--mut:#a39dc0;--line:#3a3260;--pri:#9b6bf0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 "Trebuchet MS","Segoe UI",system-ui,sans-serif}
+#app{max-width:880px;margin:0 auto;padding:16px}
+h1{font-size:1.9rem;margin:.2em 0;letter-spacing:-.02em}h2{font-size:1.2rem;margin:1.2em 0 .5em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.mut{color:var(--mut);font-size:.9rem}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.sp{justify-content:space-between}
+button,select,input[type=number],textarea{font:inherit;color:inherit}
+button{border:0;border-radius:8px;padding:9px 16px;background:var(--pri);color:#fff;font-weight:700;cursor:pointer}
+button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}button.del{background:transparent;color:var(--r);border:1px solid var(--line)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--b);outline-offset:2px}
+select,input[type=number],textarea{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+input[type=number]{width:70px}textarea{width:100%;min-height:140px;box-sizing:border-box;font:12px monospace}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center}
+.drop.on{border-color:var(--pri)}
+.q{background:var(--pri);color:#fff;border-radius:14px;padding:28px 16px;text-align:center;font-size:clamp(1.8rem,7vw,3.2rem);font-weight:800;margin:10px 0;word-break:break-word}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--y);width:100%}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.opt{display:flex;gap:10px;align-items:center;min-height:96px;padding:12px 14px;font-size:clamp(1rem,3.6vw,1.5rem);text-align:left;border-radius:10px;color:#fff;transition:opacity .2s,transform .1s}
+.opt:active{transform:scale(.98)}.opt b{font-size:1.4rem;opacity:.85}
+.o0{background:var(--r)}.o1{background:var(--b)}.o2{background:var(--y)}.o3{background:var(--g)}
+.opt.dim{opacity:.3}.opt.ok{outline:4px solid #fff;box-shadow:0 0 0 7px var(--g)}.opt.bad{opacity:.55;text-decoration:line-through}
+.fb{text-align:center;font-weight:800;font-size:1.2rem;margin:12px 0;min-height:1.6em}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);font-size:.95rem}
+.w{display:inline-block;width:90px;height:8px;background:var(--line);border-radius:5px;vertical-align:middle}.w i{display:block;height:100%;border-radius:5px;background:var(--r)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.stats div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+.stats strong{display:block;font-size:1.5rem}
+.tbl{overflow-x:auto}
+@media (max-width:520px){.opts{grid-template-columns:1fr}.opt{min-height:70px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const KEY='vocabdrill.v1', $=s=>document.querySelector(s), app=$('#app');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+let db=load();
+function load(){let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+  d=d||{};d.decks=d.decks||{};d.sessions=d.sessions||[];d.pastes=d.pastes||[];d.cfg=Object.assign({dir:'mix',n:20,sec:15,focus:true},d.cfg);return d}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
+// weakness 0..1 (higher = needs more practice); unseen words sit in the middle
+const weak=w=>{const s=w.s;if(!s||!s.n)return .6;const e=(s.n-s.c+1)/(s.n+2);return Math.min(1,e+(s.t/s.n>8?.1:0))};
+const acc=d=>{let n=0,c=0;d.words.forEach(w=>{if(w.s){n+=w.s.n;c+=w.s.c}});return n?Math.round(100*c/n):null};
+
+/* ---------- Home ---------- */
+function home(){
+  Q&&clearInterval(Q.tick);Q=null;
+  const c=db.cfg,ids=Object.keys(db.decks);
+  app.innerHTML=`<h1>Vocab Drill</h1><p class="mut">Import a word list, play quick rounds, then see which words still need work.</p>
+  <div class="drop" id="drop"><p><b>Drop an Excel file here</b> (.xlsx, .xls, .csv)</p><p class="mut">Row 1 = headers (e.g. Korean, English). Every row below = one word pair.</p>
+  <input type="file" id="file" accept=".xlsx,.xls,.csv"></div><div class="row" style="margin:10px 0"><button id="paste">Paste from clipboard</button><span class="mut">Copy rows of two columns (Korean, English) without a header, then press Paste.</span></div><div id="pz"></div><div id="msg" class="mut"></div>
+  <h2>Your decks</h2>${ids.length?ids.map(id=>{const d=db.decks[id],a=acc(d);return `<div class="card"><div class="row sp"><div><b>${esc(d.name)}</b><div class="mut">${esc(d.colA)} ↔ ${esc(d.colB)} · ${d.words.length} words · ${a===null?'not played yet':a+'% correct'}</div></div>
+  <div class="row"><button data-play="${id}">Play</button><button class="ghost" data-stats="${id}">Analytics</button><button class="del" data-del="${id}">Delete</button></div></div></div>`}).join(''):'<p class="mut">No decks yet. Import a file to start.</p>'}
+  <h2>Round settings</h2><div class="card row">
+  <label>Direction <select id="dir"><option value="mix">Mixed</option><option value="ab">Column 1 → column 2</option><option value="ba">Column 2 → column 1</option></select></label>
+  <label>Questions <input type="number" id="n" min="0" max="500"> <span class="mut">(0 = all)</span></label>
+  <label>Seconds <input type="number" id="sec" min="3" max="60"></label>
+  <label><input type="checkbox" id="focus"> Show weak words more often</label></div>
+  <h2>Paste history</h2>${db.pastes.length?db.pastes.slice(-20).reverse().map(p=>`<details class="card"><summary><b>${new Date(p.date).toLocaleString()}</b> · ${p.n} rows pasted, ${p.added} new → ${esc(p.deck)}</summary><div class="tbl"><table>${p.words.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td></tr>`).join('')}</table></div></details>`).join(''):'<p class="mut">Nothing pasted yet.</p>'}<h2>Backup</h2><div class="row"><button class="ghost" id="exp">Show backup (JSON)</button><button class="ghost" id="imp">Restore from JSON</button></div><div id="bk"></div>`;
+  $('#dir').value=c.dir;$('#n').value=c.n;$('#sec').value=c.sec;$('#focus').checked=c.focus;
+  ['dir','n','sec','focus'].forEach(k=>$('#'+k).onchange=e=>{const t=e.target;db.cfg[k]=t.type==='checkbox'?t.checked:(k==='dir'?t.value:+t.value||0);save()});
+  $('#file').onchange=e=>e.target.files[0]&&importFile(e.target.files[0]);
+  $('#paste').onclick=async()=>{
+    try{addPasted(await navigator.clipboard.readText())}
+    catch(e){$('#pz').innerHTML='<div class="card"><p class="mut">The browser did not allow direct clipboard access. Paste into the box below (Ctrl+V, or long-press and Paste); the words are added right away.</p><textarea id="pt" placeholder="One pair per line: Korean, English"></textarea><div class="row"><button id="pgo">Add words</button></div></div>';
+      const t=$('#pt');t.focus();$('#pgo').onclick=()=>addPasted(t.value);t.onpaste=()=>setTimeout(()=>addPasted(t.value),0)}
+  };
+  const dr=$('#drop');dr.ondragover=e=>{e.preventDefault();dr.classList.add('on')};dr.ondragleave=()=>dr.classList.remove('on');
+  dr.ondrop=e=>{e.preventDefault();dr.classList.remove('on');e.dataTransfer.files[0]&&importFile(e.dataTransfer.files[0])};
+  app.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>start(b.dataset.play));
+  app.querySelectorAll('[data-stats]').forEach(b=>b.onclick=()=>stats(b.dataset.stats));
+  app.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this deck and its history?')){delete db.decks[b.dataset.del];db.sessions=db.sessions.filter(s=>s.id!==b.dataset.del);save();home()}});
+  $('#exp').onclick=()=>{$('#bk').innerHTML='<p class="mut">Copy this text and keep it somewhere safe.</p><textarea readonly id="t"></textarea>';$('#t').value=JSON.stringify(db);$('#t').select()};
+  $('#imp').onclick=()=>{$('#bk').innerHTML='<p class="mut">Paste a backup here. It replaces the current data.</p><textarea id="t"></textarea><button id="go">Restore</button>';
+    $('#go').onclick=()=>{try{const d=JSON.parse($('#t').value);if(!d.decks)throw 0;db=d;save();db=load();home()}catch(e){alert('That text is not a valid backup.')}}};
+}
+// Split each pasted line into [column 1, column 2]. Excel copies as tab-separated; other separators also work.
+function parsePaste(t){
+  const out=[],un=s=>s.trim().replace(/^"(.*)"$/,'$1').trim();
+  t.split(/\r?\n/).forEach(l=>{
+    if(!l.trim())return;
+    for(const s of ['\t',';','|',' - ',',']){const i=l.indexOf(s);if(i>0){
+      const a=un(l.slice(0,i)),b=un(l.slice(i+s.length).split('\t')[0]);
+      if(a&&b)out.push({a,b});break}}
+  });
+  return out;
+}
+function addPasted(text){
+  const rows=parsePaste(text);
+  if(!rows.length){$('#msg').textContent='Nothing to add. Copy rows with two columns (Korean, English) and try again.';return}
+  const name='Pasted words',d=db.decks[name]=db.decks[name]||{name,colA:'Korean',colB:'English',words:[]};
+  const have=new Set(d.words.map(w=>w.k));let added=0;
+  rows.forEach(r=>{const k=r.a+'|'+r.b;if(!have.has(k)){have.add(k);d.words.push({k,a:r.a,b:r.b,s:null});added++}});
+  db.pastes.push({date:Date.now(),deck:name,n:rows.length,added,words:rows});
+  save();home();
+  $('#msg').textContent=`Pasted ${rows.length} rows (${added} new) into “${name}”.`+(d.words.length<4?` Add ${4-d.words.length} more words to play this deck.`:'');
+}
+function importFile(f){
+  const m=$('#msg'),r=new FileReader();
+  r.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+    if(rows.length<5)throw new Error('Need a header row and at least 4 word rows.');
+    const colA=String(rows[0][0]||'Column 1').trim(),colB=String(rows[0][1]||'Column 2').trim(),name=f.name.replace(/\.[^.]+$/,'');
+    const old=db.decks[name],keep={};old&&old.words.forEach(w=>keep[w.k]=w.s);
+    const seen=new Set(),words=[];
+    rows.slice(1).forEach(x=>{const a=String(x[0]).trim(),b=String(x[1]).trim(),k=a+'|'+b;if(a&&b&&!seen.has(k)){seen.add(k);words.push({k,a,b,s:keep[k]||null})}});
+    if(words.length<4)throw new Error('Need at least 4 valid word pairs.');
+    db.decks[name]={name,colA,colB,words};save();home();$('#msg').textContent=`Imported ${words.length} words into “${name}”.`;
+  }catch(err){m.textContent='Could not import: '+err.message}};
+  r.readAsArrayBuffer(f);
+}
+
+/* ---------- Quiz ---------- */
+let Q=null;
+function start(id,only){
+  const d=db.decks[id],c=db.cfg;
+  if(d.words.length<4){alert('This deck needs at least 4 words to play.');return}
+  let pool=d.words.filter(w=>!only||only.includes(w.k));
+  const wt=w=>c.focus&&!only?.2+2*weak(w):1;
+  pool=pool.map(w=>[Math.random()**(1/wt(w)),w]).sort((x,y)=>y[0]-x[0]).map(x=>x[1]); // weighted random order
+  if(c.n>0)pool=pool.slice(0,c.n);
+  Q={id,list:pool,i:0,score:0,streak:0,best:0,ok:0,missed:[],t0:Date.now()};ask();
+}
+function ask(){
+  const d=db.decks[Q.id],w=Q.list[Q.i],c=db.cfg;
+  const f=c.dir==='mix'?Math.random()<.5:c.dir==='ab';           // f: show column A, answer in column B
+  const q=f?w.a:w.b,ans=f?w.b:w.a;
+  const ds=[...new Set(shuffle(d.words.filter(x=>x!==w)).map(x=>f?x.b:x.a).filter(t=>t!==ans))].slice(0,3);
+  Q.w=w;Q.ans=ans;Q.opts=shuffle([ans,...ds]);Q.locked=false;Q.limit=c.sec*1000;Q.start=Date.now();
+  app.innerHTML=`<div class="row sp mut"><span>Question ${Q.i+1} / ${Q.list.length}</span><span>Score <b>${Q.score}</b> · Streak <b>${Q.streak}</b></span><button class="ghost" id="quit">Quit</button></div>
+  <div class="bar" style="margin-top:8px"><i id="tb"></i></div><div class="q">${esc(q)}</div><div class="fb" id="fb"></div>
+  <div class="opts">${Q.opts.map((o,i)=>`<button class="opt o${i}" data-i="${i}"><b>${'▲◆●■'[i]}</b><span>${esc(o)}</span></button>`).join('')}</div><div class="row" style="justify-content:center;margin-top:10px"><button class="ghost" id="nx" hidden>Next</button></div>`;
+  app.querySelectorAll('.opt').forEach(b=>b.onclick=()=>pick(+b.dataset.i));
+  $('#quit').onclick=()=>{if(confirm('Quit this round? Answers so far are kept.'))finish()};
+  $('#nx').onclick=next;
+  clearInterval(Q.tick);
+  Q.tick=setInterval(()=>{const l=1-(Date.now()-Q.start)/Q.limit;$('#tb').style.width=Math.max(0,l*100)+'%';if(l<=0)pick(-1)},100);
+}
+function pick(i){
+  if(Q.locked)return;Q.locked=true;clearInterval(Q.tick);
+  const dt=Math.min((Date.now()-Q.start),Q.limit),ok=i>=0&&Q.opts[i]===Q.ans,w=Q.w;
+  w.s=w.s||{n:0,c:0,t:0};w.s.n++;w.s.c+=ok?1:0;w.s.t+=dt/1000;w.s.last=Date.now();
+  if(ok){Q.ok++;Q.streak++;Q.best=Math.max(Q.best,Q.streak);Q.score+=Math.round(500+500*(1-dt/Q.limit))+Math.min(Q.streak-1,5)*50}
+  else{Q.streak=0;Q.missed.push(w)}
+  save();
+  app.querySelectorAll('.opt').forEach((b,k)=>{b.disabled=true;if(Q.opts[k]===Q.ans)b.classList.add('ok');else if(k===i)b.classList.add('bad');else b.classList.add('dim')});
+  $('#fb').textContent=ok?'Correct!':(i<0?'Time’s up. ':'Not quite. ')+'Answer: '+Q.ans;
+  $('#nx').hidden=false;$('#nx').focus();
+  Q.to=setTimeout(next,ok?1100:2600);
+}
+function next(){clearTimeout(Q.to);Q.i++;Q.i<Q.list.length?ask():finish()}
+function finish(){
+  clearInterval(Q.tick);clearTimeout(Q.to);
+  const answered=Q.i+(Q.locked?1:0),r=Q;
+  if(answered>0){db.sessions.push({id:r.id,date:Date.now(),n:answered,ok:r.ok,score:r.score});save()}
+  const p=answered?Math.round(100*r.ok/answered):0;
+  app.innerHTML=`<h1>Round complete</h1><div class="stats"><div><strong>${r.score}</strong>score</div><div><strong>${p}%</strong>${r.ok} of ${answered} correct</div><div><strong>${r.best}</strong>best streak</div></div>
+  <h2>Words to review</h2>${r.missed.length?`<div class="card">${r.missed.map(w=>`<div>${esc(w.a)} — ${esc(w.b)}</div>`).join('')}</div>`:'<p class="mut">No mistakes this round.</p>'}
+  <div class="row"><button id="again">Play again</button>${r.missed.length?'<button class="ghost" id="rm">Drill missed words</button>':''}<button class="ghost" id="st">Analytics</button><button class="ghost" id="hm">Home</button></div>`;
+  $('#again').onclick=()=>start(r.id);$('#hm').onclick=home;$('#st').onclick=()=>stats(r.id);
+  $('#rm')&&($('#rm').onclick=()=>start(r.id,r.missed.map(w=>w.k)));
+  Q=null;
+}
+document.addEventListener('keydown',e=>{
+  if(!Q||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+  if(!Q.locked&&'1234'.includes(e.key)&&Q.opts[+e.key-1]!==undefined)pick(+e.key-1);
+  else if(Q.locked&&(e.key==='Enter'||e.key===' ')){e.preventDefault();next()}
+});
+
+/* ---------- Analytics ---------- */
+function stats(id){
+  const d=db.decks[id],S=db.sessions.filter(s=>s.id===id),played=d.words.filter(w=>w.s&&w.s.n),a=acc(d);
+  const rank=[...played].sort((x,y)=>weak(y)-weak(x)),need=rank.filter(w=>weak(w)>=.4);
+  const unseen=d.words.length-played.length;
+  app.innerHTML=`<div class="row sp"><h1>${esc(d.name)}</h1><button class="ghost" id="hm">Home</button></div>
+  <div class="stats"><div><strong>${S.length}</strong>rounds played</div><div><strong>${a===null?'–':a+'%'}</strong>overall accuracy</div><div><strong>${played.length}/${d.words.length}</strong>words practiced</div><div><strong>${need.length}</strong>need more practice</div></div>
+  <div class="row" style="margin:12px 0">${need.length?`<button id="dw">Drill my ${Math.min(20,need.length)} weakest words</button>`:''}${unseen?`<button class="ghost" id="dn">Drill ${Math.min(20,unseen)} new words</button>`:''}</div>
+  <h2>Words ranked by what needs work</h2>${played.length?`<div class="tbl"><table><tr><th>${esc(d.colA)}</th><th>${esc(d.colB)}</th><th>Tries</th><th>Correct</th><th>Avg time</th><th>Weakness</th></tr>
+  ${rank.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td><td>${w.s.n}</td><td>${Math.round(100*w.s.c/w.s.n)}%</td><td>${(w.s.t/w.s.n).toFixed(1)}s</td><td><span class="w"><i style="width:${Math.round(weak(w)*100)}%"></i></span></td></tr>`).join('')}</table></div>`:'<p class="mut">Play a round to see your analytics.</p>'}
+  ${unseen&&played.length?`<p class="mut">${unseen} words have not appeared yet.</p>`:''}
+  <h2>Recent rounds</h2>${S.length?`<div class="tbl"><table><tr><th>Date</th><th>Correct</th><th>Score</th></tr>${S.slice(-10).reverse().map(s=>`<tr><td>${new Date(s.date).toLocaleString()}</td><td>${s.ok}/${s.n}</td><td>${s.score}</td></tr>`).join('')}</table></div>`:'<p class="mut">No rounds yet.</p>'}`;
+  $('#hm').onclick=home;
+  $('#dw')&&($('#dw').onclick=()=>start(id,need.slice(0,20).map(w=>w.k)));
+  $('#dn')&&($('#dn').onclick=()=>start(id,shuffle(d.words.filter(w=>!w.s||!w.s.n)).slice(0,20).map(w=>w.k)));
+}
+home();
+</script>
+</body>
+</html>
