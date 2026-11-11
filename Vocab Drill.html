@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vocab Drill</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#f6f4fb;--fg:#1d1a2b;--card:#fff;--mut:#6b6780;--line:#dcd8ea;--pri:#46178f;--r:#e21b3c;--b:#1368ce;--y:#c98f00;--g:#26890c;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -16,14 +15,14 @@ body{background:var(--bg);color:var(--fg);font:16px/1.5 "Trebuchet MS","Segoe UI
 h1{font-size:1.9rem;margin:.2em 0;letter-spacing:-.02em}h2{font-size:1.2rem;margin:1.2em 0 .5em}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
 .mut{color:var(--mut);font-size:.9rem}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.sp{justify-content:space-between}
+.tag{display:inline-block;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line);border-radius:2px;padding:1px 5px;margin-left:6px;color:var(--mut);white-space:nowrap}
+.tag.again{color:var(--r);border-color:var(--r)}.tag.hard{color:var(--y);border-color:var(--y)}
 button,select,input[type=number],textarea{font:inherit;color:inherit}
 button{border:0;border-radius:8px;padding:9px 16px;background:var(--pri);color:#fff;font-weight:700;cursor:pointer}
 button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}button.del{background:transparent;color:var(--r);border:1px solid var(--line)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--b);outline-offset:2px}
 select,input[type=number],textarea{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
 input[type=number]{width:70px}textarea{width:100%;min-height:140px;box-sizing:border-box;font:12px monospace}
-.drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center}
-.drop.on{border-color:var(--pri)}
 .q{background:var(--pri);color:#fff;border-radius:14px;padding:28px 16px;text-align:center;font-size:clamp(1.8rem,7vw,3.2rem);font-weight:800;margin:10px 0;word-break:break-word}
 .bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--y);width:100%}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
@@ -37,8 +36,39 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.stats div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
 .stats strong{display:block;font-size:1.5rem}
 .tbl{overflow-x:auto}
-@media (max-width:520px){.opts{grid-template-columns:1fr}.opt{min-height:70px}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Flashcards: index-card typography, not a dashboard */
+.rev{max-width:660px;margin:0 auto}
+.revbar{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mut)}
+.revbar .mid{font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.revbar button{padding:6px 10px;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase}
+.pbar{height:2px;background:var(--line);margin:12px 0 26px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--fg);width:0;transition:width .3s ease}
+.fcard{background:var(--card);border:1px solid var(--line);border-radius:3px;box-shadow:7px 7px 0 var(--line);min-height:min(56vh,380px);padding:22px 24px;display:flex;flex-direction:column;cursor:pointer;user-select:none;transition:box-shadow .15s,transform .15s}
+.fcard:hover{box-shadow:9px 9px 0 var(--line)}
+.fcard:active{transform:translate(1px,1px);box-shadow:5px 5px 0 var(--line)}
+.fcard:focus-visible{outline:3px solid var(--b);outline-offset:3px}
+.fmeta{display:flex;justify-content:space-between;gap:12px;font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mut)}
+.fterm{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px 0;font-family:Georgia,"Iowan Old Style","Times New Roman",serif;font-size:clamp(2.2rem,9vw,4rem);line-height:1.08;letter-spacing:-.02em;overflow-wrap:anywhere}
+.fterm.small{flex:0;padding:6px 0 2px;font-size:clamp(1.5rem,5.4vw,2.3rem)}
+.frule{border:0;border-top:1px solid var(--line);margin:14px 0 12px;width:100%}
+.fback{flex:1;display:flex;flex-direction:column;justify-content:center;padding:6px 0 14px;animation:fin .2s ease-out}
+.fsrc{text-align:center;font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin-bottom:6px}
+.fans{text-align:center;font-family:Georgia,"Iowan Old Style","Times New Roman",serif;font-size:clamp(1.4rem,6vw,2.2rem);line-height:1.25;overflow-wrap:anywhere}
+.fhint{text-align:center;font-size:.75rem;color:var(--mut);letter-spacing:.02em}
+.fhint kbd{font:inherit;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 5px;background:var(--bg);color:var(--fg)}
+.fgrade{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:18px}
+.fgrade button{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:10px 8px 9px;font-size:.9rem;line-height:1.2;text-align:left;font-weight:700}
+.fgrade button:hover{border-color:var(--fg)}
+.fgrade button span{display:block;margin-top:3px;font-size:.68rem;font-weight:400;letter-spacing:.04em;color:var(--mut);font-variant-numeric:tabular-nums}
+.fgrade button i{display:inline-block;font-style:normal;font-size:.62rem;font-weight:400;color:var(--mut);border:1px solid var(--line);border-radius:2px;padding:0 3px;margin-right:5px;vertical-align:1px}
+.fgrade button[data-g=again]{color:var(--r)}
+.fgrade button[data-g=hard]{color:var(--y)}
+.fgrade button[data-g=good]{color:var(--g)}
+.fgrade button[data-g=easy]{color:var(--b)}
+.fnote{margin:14px 0 0;text-align:center;font-size:.72rem;color:var(--mut)}
+@keyframes fin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media (max-width:520px){.opts{grid-template-columns:1fr}.opt{min-height:70px}.fgrade{grid-template-columns:1fr 1fr}.fcard{box-shadow:5px 5px 0 var(--line)}.revbar{font-size:.62rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -49,7 +79,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 let db=load();
 function load(){let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
-  d=d||{};d.decks=d.decks||{};d.sessions=d.sessions||[];d.pastes=d.pastes||[];d.cfg=Object.assign({dir:'mix',n:20,sec:15,focus:true},d.cfg);return d}
+  d=d||{};d.decks=d.decks||{};d.sessions=d.sessions||[];d.pastes=d.pastes||[];d.cfg=Object.assign({dir:'mix',n:20,sec:15,focus:true,cards:20},d.cfg);return d}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
 // weakness 0..1 (higher = needs more practice); unseen words sit in the middle
 const weak=w=>{const s=w.s;if(!s||!s.n)return .6;const e=(s.n-s.c+1)/(s.n+2);return Math.min(1,e+(s.t/s.n>8?.1:0))};
@@ -57,30 +87,28 @@ const acc=d=>{let n=0,c=0;d.words.forEach(w=>{if(w.s){n+=w.s.n;c+=w.s.c}});retur
 
 /* ---------- Home ---------- */
 function home(){
-  Q&&clearInterval(Q.tick);Q=null;
+  Q&&clearInterval(Q.tick);Q=null;R=null;
   const c=db.cfg,ids=Object.keys(db.decks);
-  app.innerHTML=`<h1>Vocab Drill</h1><p class="mut">Import a word list, play quick rounds, then see which words still need work.</p>
-  <div class="drop" id="drop"><p><b>Drop an Excel file here</b> (.xlsx, .xls, .csv)</p><p class="mut">Row 1 = headers (e.g. Korean, English). Every row below = one word pair.</p>
-  <input type="file" id="file" accept=".xlsx,.xls,.csv"></div><div class="row" style="margin:10px 0"><button id="paste">Paste from clipboard</button><span class="mut">Copy rows of two columns (Korean, English) without a header, then press Paste.</span></div><div id="pz"></div><div id="msg" class="mut"></div>
-  <h2>Your decks</h2>${ids.length?ids.map(id=>{const d=db.decks[id],a=acc(d);return `<div class="card"><div class="row sp"><div><b>${esc(d.name)}</b><div class="mut">${esc(d.colA)} ↔ ${esc(d.colB)} · ${d.words.length} words · ${a===null?'not played yet':a+'% correct'}</div></div>
-  <div class="row"><button data-play="${id}">Play</button><button class="ghost" data-stats="${id}">Analytics</button><button class="del" data-del="${id}">Delete</button></div></div></div>`}).join(''):'<p class="mut">No decks yet. Import a file to start.</p>'}
+  app.innerHTML=`<h1>Vocab Drill</h1><p class="mut">Paste a word list, review it as spaced-repetition flashcards, play quick rounds, then see which words still need work.</p>
+  <div class="row" style="margin:16px 0"><button id="paste">Paste from clipboard</button><span class="mut">Copy rows of two columns (Korean, English) without a header, then press Paste.</span></div><div id="pz"></div><div id="msg" class="mut"></div>
+  <h2>Your decks</h2>${ids.length?ids.map(id=>{const d=db.decks[id],a=acc(d),du=deckDue(d),n=Math.min(du.due+du.fresh,c.cards>0?c.cards:Infinity);return `<div class="card"><div class="row sp"><div><b>${esc(d.name)}</b><div class="mut">${esc(d.colA)} ↔ ${esc(d.colB)} · ${d.words.length} words · ${du.due} due · ${du.fresh} new · ${a===null?'not played yet':a+'% correct'}</div></div>
+  <div class="row"><button data-play="${id}">Play</button><button class="ghost" data-review="${id}">Review${n?' ('+n+')':''}</button><button class="ghost" data-stats="${id}">Analytics</button><button class="del" data-del="${id}">Delete</button></div></div></div>`}).join(''):'<p class="mut">No decks yet. Paste a word list to start.</p>'}
   <h2>Round settings</h2><div class="card row">
   <label>Direction <select id="dir"><option value="mix">Mixed</option><option value="ab">Column 1 → column 2</option><option value="ba">Column 2 → column 1</option></select></label>
   <label>Questions <input type="number" id="n" min="0" max="500"> <span class="mut">(0 = all)</span></label>
+  <label>Review cards <input type="number" id="cards" min="0" max="500"> <span class="mut">(0 = all)</span></label>
   <label>Seconds <input type="number" id="sec" min="3" max="60"></label>
   <label><input type="checkbox" id="focus"> Show weak words more often</label></div>
   <h2>Paste history</h2>${db.pastes.length?db.pastes.slice(-20).reverse().map(p=>`<details class="card"><summary><b>${new Date(p.date).toLocaleString()}</b> · ${p.n} rows pasted, ${p.added} new → ${esc(p.deck)}</summary><div class="tbl"><table>${p.words.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td></tr>`).join('')}</table></div></details>`).join(''):'<p class="mut">Nothing pasted yet.</p>'}<h2>Backup</h2><div class="row"><button class="ghost" id="exp">Show backup (JSON)</button><button class="ghost" id="imp">Restore from JSON</button></div><div id="bk"></div>`;
-  $('#dir').value=c.dir;$('#n').value=c.n;$('#sec').value=c.sec;$('#focus').checked=c.focus;
-  ['dir','n','sec','focus'].forEach(k=>$('#'+k).onchange=e=>{const t=e.target;db.cfg[k]=t.type==='checkbox'?t.checked:(k==='dir'?t.value:+t.value||0);save()});
-  $('#file').onchange=e=>e.target.files[0]&&importFile(e.target.files[0]);
+  $('#dir').value=c.dir;$('#n').value=c.n;$('#cards').value=c.cards;$('#sec').value=c.sec;$('#focus').checked=c.focus;
+  ['dir','n','cards','sec','focus'].forEach(k=>$('#'+k).onchange=e=>{const t=e.target;db.cfg[k]=t.type==='checkbox'?t.checked:(k==='dir'?t.value:+t.value||0);save()});
   $('#paste').onclick=async()=>{
     try{addPasted(await navigator.clipboard.readText())}
     catch(e){$('#pz').innerHTML='<div class="card"><p class="mut">The browser did not allow direct clipboard access. Paste into the box below (Ctrl+V, or long-press and Paste); the words are added right away.</p><textarea id="pt" placeholder="One pair per line: Korean, English"></textarea><div class="row"><button id="pgo">Add words</button></div></div>';
       const t=$('#pt');t.focus();$('#pgo').onclick=()=>addPasted(t.value);t.onpaste=()=>setTimeout(()=>addPasted(t.value),0)}
   };
-  const dr=$('#drop');dr.ondragover=e=>{e.preventDefault();dr.classList.add('on')};dr.ondragleave=()=>dr.classList.remove('on');
-  dr.ondrop=e=>{e.preventDefault();dr.classList.remove('on');e.dataTransfer.files[0]&&importFile(e.dataTransfer.files[0])};
   app.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>start(b.dataset.play));
+  app.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>review(b.dataset.review));
   app.querySelectorAll('[data-stats]').forEach(b=>b.onclick=()=>stats(b.dataset.stats));
   app.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this deck and its history?')){delete db.decks[b.dataset.del];db.sessions=db.sessions.filter(s=>s.id!==b.dataset.del);save();home()}});
   $('#exp').onclick=()=>{$('#bk').innerHTML='<p class="mut">Copy this text and keep it somewhere safe.</p><textarea readonly id="t"></textarea>';$('#t').value=JSON.stringify(db);$('#t').select()};
@@ -108,24 +136,10 @@ function addPasted(text){
   save();home();
   $('#msg').textContent=`Pasted ${rows.length} rows (${added} new) into “${name}”.`+(d.words.length<4?` Add ${4-d.words.length} more words to play this deck.`:'');
 }
-function importFile(f){
-  const m=$('#msg'),r=new FileReader();
-  r.onload=e=>{try{
-    const wb=XLSX.read(e.target.result,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-    if(rows.length<5)throw new Error('Need a header row and at least 4 word rows.');
-    const colA=String(rows[0][0]||'Column 1').trim(),colB=String(rows[0][1]||'Column 2').trim(),name=f.name.replace(/\.[^.]+$/,'');
-    const old=db.decks[name],keep={};old&&old.words.forEach(w=>keep[w.k]=w.s);
-    const seen=new Set(),words=[];
-    rows.slice(1).forEach(x=>{const a=String(x[0]).trim(),b=String(x[1]).trim(),k=a+'|'+b;if(a&&b&&!seen.has(k)){seen.add(k);words.push({k,a,b,s:keep[k]||null})}});
-    if(words.length<4)throw new Error('Need at least 4 valid word pairs.');
-    db.decks[name]={name,colA,colB,words};save();home();$('#msg').textContent=`Imported ${words.length} words into “${name}”.`;
-  }catch(err){m.textContent='Could not import: '+err.message}};
-  r.readAsArrayBuffer(f);
-}
-
 /* ---------- Quiz ---------- */
 let Q=null;
 function start(id,only){
+  R=null;
   const d=db.decks[id],c=db.cfg;
   if(d.words.length<4){alert('This deck needs at least 4 words to play.');return}
   let pool=d.words.filter(w=>!only||only.includes(w.k));
@@ -174,25 +188,118 @@ function finish(){
   $('#rm')&&($('#rm').onclick=()=>start(r.id,r.missed.map(w=>w.k)));
   Q=null;
 }
+/* ---------- Flashcards (spaced repetition) ---------- */
+const MIN=6e4,DAY=864e5;
+function deckDue(d){
+  const t=Date.now();let due=0,fresh=0;
+  d.words.forEach(w=>{if(!w.fs||!w.fs.r)fresh++;else if(w.fs.d<=t)due++});
+  return {due,fresh};
+}
+function fmtWait(ms){
+  if(ms<MIN)return 'in under a minute';
+  if(ms<36e5)return 'in '+Math.round(ms/MIN)+' min';
+  if(ms<DAY)return 'in '+Math.round(ms/36e5)+' h';
+  return 'in '+Math.round(ms/DAY)+' day'+(Math.round(ms/DAY)===1?'':'s');
+}
+function previews(w){
+  const c=w.fs||{i:0,e:2.5};
+  return {
+    again:'1 min',
+    hard:c.i?Math.max(1,Math.round(c.i*1.2))+' d':'10 min',
+    good:c.i?Math.max(1,Math.round(c.i*c.e))+' d':'1 d',
+    easy:c.i?Math.max(2,Math.round(c.i*c.e*1.3))+' d':'3 d'
+  };
+}
+let R=null;
+function review(id){
+  if(Q){clearInterval(Q.tick);Q=null}
+  const d=db.decks[id],now=Date.now();
+  const due=d.words.filter(w=>w.fs&&w.fs.r&&w.fs.d<=now);
+  const fresh=d.words.filter(w=>!w.fs||!w.fs.r);
+  const limit=db.cfg.cards>0?db.cfg.cards:Infinity;
+  const list=shuffle(due).concat(shuffle(fresh)).slice(0,limit);
+  R={id,list,i:0,total:list.length,seen:new Set(),g:{again:0,hard:0,good:0,easy:0},trouble:new Map(),reveal:false};
+  if(!list.length){caughtUp(id);R=null;return}
+  drawCard();
+}
+function caughtUp(id){
+  const d=db.decks[id],later=d.words.filter(w=>w.fs&&w.fs.r).map(w=>w.fs.d),nx=later.length?Math.min(...later):null;
+  app.innerHTML=`<div class="rev"><div class="revbar"><span>${esc(d.name)}</span><button class="ghost" id="hm">Home</button></div>
+  <h1 style="margin-top:28px">All caught up</h1><p class="mut">${nx?'Next card '+fmtWait(nx-Date.now())+'.':'No cards scheduled yet.'} Due reviews and new cards appear here.</p>
+  <div class="row"><button id="pq">Play quiz</button><button class="ghost" id="hm2">Home</button></div></div>`;
+  $('#hm').onclick=home;$('#hm2').onclick=home;$('#pq').onclick=()=>start(id);
+}
+function drawCard(){
+  if(!R)return;
+  if(R.i>=R.list.length)return finishReview();
+  const d=db.decks[R.id],w=R.list[R.i],f=db.cfg.dir==='mix'?Math.random()<.5:db.cfg.dir==='ab',p=previews(w);
+  R.w=w;R.q=f?w.a:w.b;R.ans=f?w.b:w.a;
+  const front=f?d.colA:d.colB,back=f?d.colB:d.colA;
+  app.innerHTML=`<div class="rev"><div class="revbar"><span>${esc(d.name)}</span><span class="mid">${R.seen.size} / ${R.total}</span><button class="ghost" id="end">End</button></div>
+  <div class="pbar"><i style="width:${R.total?Math.round(R.seen.size/R.total*100):0}%"></i></div>
+  <div class="fcard" id="fcard" tabindex="0" role="button" aria-label="${R.reveal?'Answer shown':'Reveal answer'}">
+    <div class="fmeta"><span>${esc(front)}</span><span>${w.fs&&w.fs.r?'card '+(w.fs.r+1):'new card'}</span></div>
+    <div class="fterm${R.reveal?' small':''}">${esc(R.q)}</div>
+    ${R.reveal?`<hr class="frule"><div class="fback"><div class="fsrc">${esc(back)}</div><div class="fans">${esc(R.ans)}</div></div>`:`<div class="fhint">Click card or press <kbd>Space</kbd> to reveal</div>`}
+  </div>
+  ${R.reveal?`<div class="fgrade"><button data-g="again"><i>1</i>Again<span>${p.again}</span></button><button data-g="hard"><i>2</i>Hard<span>${p.hard}</span></button><button data-g="good"><i>3</i>Good<span>${p.good}</span></button><button data-g="easy"><i>4</i>Easy<span>${p.easy}</span></button></div><p class="fnote">Keys 1–4 grade · Again repeats the card later in this round.</p>`:`<p class="fnote">${w.fs&&w.fs.r?'Scheduled '+fmtWait(w.fs.d-Date.now())+' · ease '+w.fs.e.toFixed(2):'First time seeing this card.'}</p>`}</div>`;
+  $('#end').onclick=finishReview;
+  $('#fcard').onclick=()=>{if(!R.reveal)reveal()};
+  if(R.reveal)app.querySelectorAll('.fgrade button').forEach(b=>b.onclick=()=>rate(b.dataset.g));
+}
+function reveal(){if(!R||R.reveal)return;R.reveal=true;drawCard()}
+function rate(g){
+  if(!R||!R.reveal)return;
+  const w=R.w,c=w.fs=w.fs||{d:0,i:0,e:2.5,r:0,l:0},now=Date.now();
+  const bad=()=>{const t=R.trouble.get(w.k)||{w,again:0,hard:0};R.trouble.set(w.k,t);return t};
+  if(g==='again'){c.e=Math.max(1.3,c.e-.2);c.i=0;c.l++;c.d=now+MIN;R.list.push(w);bad().again++}
+  else if(g==='hard'){c.e=Math.max(1.3,c.e-.15);c.h=(c.h||0)+1;if(!c.i){c.d=now+10*MIN}else{c.i=Math.max(1,Math.round(c.i*1.2));c.d=now+c.i*DAY};bad().hard++}
+  else if(g==='good'){if(!c.i){c.i=1;c.d=now+DAY}else{c.i=Math.max(1,Math.round(c.i*c.e));c.d=now+c.i*DAY}}
+  else{c.e=Math.min(3,c.e+.15);c.i=c.i?Math.max(2,Math.round(c.i*c.e*1.3)):3;c.d=now+c.i*DAY}
+  c.r++;R.seen.add(w.k);R.g[g]++;save();R.i++;R.reveal=false;drawCard();
+}
+function finishReview(){
+  if(!R){home();return}
+  if(!R.seen.size){R=null;return home()}
+  const id=R.id,g={...R.g},seen=R.seen.size,du=deckDue(db.decks[id]),bad=[...R.trouble.values()];
+  R=null;
+  app.innerHTML=`<div class="rev"><div class="revbar"><span>${esc(db.decks[id].name)}</span><span class="mid">flashcards</span></div>
+  <h1 style="margin-top:28px">Review finished</h1><div class="stats"><div><strong>${seen}</strong>cards reviewed</div><div><strong>${g.good+g.easy}</strong>graded Good or Easy</div><div><strong>${g.again}</strong>marked Again</div><div><strong>${du.due+du.fresh}</strong>still to review</div></div>
+  <div class="row" style="margin:16px 0">${du.due+du.fresh?'<button id="more">Keep reviewing</button>':''}<button class="ghost" id="pq">Play quiz</button><button class="ghost" id="hm">Home</button></div>
+  <h2>Marked Again or Hard</h2>${bad.length?`<div class="card">${bad.map(x=>`<div class="row sp" style="padding:7px 0;border-bottom:1px solid var(--line)"><span>${esc(x.w.a)} — ${esc(x.w.b)}</span><span>${x.again?`<span class="tag again">Again ${x.again}</span>`:''}${x.hard?`<span class="tag hard">Hard ${x.hard}</span>`:''}</span></div>`).join('')}</div>`:'<p class="mut">No cards were marked Again or Hard this session.</p>'}
+  <p class="mut">Again brings a card back in a minute. Hard nudges the interval up slowly; Good multiplies it by the card’s ease; Easy multiplies it further. ${db.cfg.cards>0?'Up to '+db.cfg.cards+' cards per session; Again repeats within the session.':'This session included every due and new card.'}</p></div>`;
+  $('#more')&&($('#more').onclick=()=>review(id));
+  $('#pq').onclick=()=>start(id);$('#hm').onclick=home;
+}
 document.addEventListener('keydown',e=>{
-  if(!Q||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+  if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+  if(R){
+    if(!R.reveal&&(e.key===' '||e.key==='Enter')){e.preventDefault();reveal();return}
+    if(R.reveal&&'1234'.includes(e.key)){e.preventDefault();rate(['again','hard','good','easy'][+e.key-1]);return}
+    return;
+  }
+  if(!Q)return;
   if(!Q.locked&&'1234'.includes(e.key)&&Q.opts[+e.key-1]!==undefined)pick(+e.key-1);
   else if(Q.locked&&(e.key==='Enter'||e.key===' ')){e.preventDefault();next()}
 });
 
 /* ---------- Analytics ---------- */
 function stats(id){
-  const d=db.decks[id],S=db.sessions.filter(s=>s.id===id),played=d.words.filter(w=>w.s&&w.s.n),a=acc(d);
+  const d=db.decks[id],S=db.sessions.filter(s=>s.id===id),played=d.words.filter(w=>w.s&&w.s.n),a=acc(d),du=deckDue(d);
   const rank=[...played].sort((x,y)=>weak(y)-weak(x)),need=rank.filter(w=>weak(w)>=.4);
   const unseen=d.words.length-played.length;
+  const bad=d.words.filter(w=>w.fs&&(w.fs.l||w.fs.h)).sort((x,y)=>((y.fs.l||0)*2+(y.fs.h||0))-((x.fs.l||0)*2+(x.fs.h||0)));
   app.innerHTML=`<div class="row sp"><h1>${esc(d.name)}</h1><button class="ghost" id="hm">Home</button></div>
-  <div class="stats"><div><strong>${S.length}</strong>rounds played</div><div><strong>${a===null?'–':a+'%'}</strong>overall accuracy</div><div><strong>${played.length}/${d.words.length}</strong>words practiced</div><div><strong>${need.length}</strong>need more practice</div></div>
-  <div class="row" style="margin:12px 0">${need.length?`<button id="dw">Drill my ${Math.min(20,need.length)} weakest words</button>`:''}${unseen?`<button class="ghost" id="dn">Drill ${Math.min(20,unseen)} new words</button>`:''}</div>
+  <div class="stats"><div><strong>${S.length}</strong>rounds played</div><div><strong>${a===null?'–':a+'%'}</strong>overall accuracy</div><div><strong>${played.length}/${d.words.length}</strong>words practiced</div><div><strong>${need.length}</strong>need more practice</div><div><strong>${du.due+du.fresh}</strong>cards to review</div></div>
+  <div class="row" style="margin:12px 0"><button class="ghost" id="dr">Review flashcards${du.due+du.fresh?' ('+(du.due+du.fresh)+')':''}</button>${need.length?`<button id="dw">Drill my ${Math.min(20,need.length)} weakest words</button>`:''}${unseen?`<button class="ghost" id="dn">Drill ${Math.min(20,unseen)} new words</button>`:''}</div>
+  <h2>Ever marked Again or Hard <span class="mut">(${bad.length})</span></h2><p class="mut">Permanent record. A later Good or Easy grade does not remove a word from this list.</p>
+  ${bad.length?`<div class="tbl"><table><tr><th>${esc(d.colA)}</th><th>${esc(d.colB)}</th><th>Again</th><th>Hard</th></tr>${bad.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td><td>${w.fs.l||0}</td><td>${w.fs.h||0}</td></tr>`).join('')}</table></div>`:'<p class="mut">No words have been marked Again or Hard yet.</p>'}
   <h2>Words ranked by what needs work</h2>${played.length?`<div class="tbl"><table><tr><th>${esc(d.colA)}</th><th>${esc(d.colB)}</th><th>Tries</th><th>Correct</th><th>Avg time</th><th>Weakness</th></tr>
   ${rank.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td><td>${w.s.n}</td><td>${Math.round(100*w.s.c/w.s.n)}%</td><td>${(w.s.t/w.s.n).toFixed(1)}s</td><td><span class="w"><i style="width:${Math.round(weak(w)*100)}%"></i></span></td></tr>`).join('')}</table></div>`:'<p class="mut">Play a round to see your analytics.</p>'}
   ${unseen&&played.length?`<p class="mut">${unseen} words have not appeared yet.</p>`:''}
   <h2>Recent rounds</h2>${S.length?`<div class="tbl"><table><tr><th>Date</th><th>Correct</th><th>Score</th></tr>${S.slice(-10).reverse().map(s=>`<tr><td>${new Date(s.date).toLocaleString()}</td><td>${s.ok}/${s.n}</td><td>${s.score}</td></tr>`).join('')}</table></div>`:'<p class="mut">No rounds yet.</p>'}`;
   $('#hm').onclick=home;
+  $('#dr').onclick=()=>review(id);
   $('#dw')&&($('#dw').onclick=()=>start(id,need.slice(0,20).map(w=>w.k)));
   $('#dn')&&($('#dn').onclick=()=>start(id,shuffle(d.words.filter(w=>!w.s||!w.s.n)).slice(0,20).map(w=>w.k)));
 }

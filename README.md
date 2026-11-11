@@ -6,12 +6,12 @@ A Kahoot-style vocabulary quiz for memorizing and revising a language (built aro
 
 ## Features
 
+- **Anki-style flashcards**: flip a card, grade yourself Again / Hard / Good / Easy, and let a spaced-repetition schedule decide what comes back.
 - **Kahoot-style rounds**: the question sits at the top, with four colored answer buttons below.
-- **Excel import**: load `.xlsx`, `.xls` or `.csv` files. Row 1 is the header, and every row below is one word pair.
 - **Paste import**: copy two columns from Excel or Sheets (no header) and press **Paste from clipboard**.
 - **Unpredictable order**: every round is freshly shuffled, and each word appears at most once per round.
 - **Weak-word focus**: optionally show the words you struggle with more often (the order stays random).
-- **Analytics**: a per-deck ranking of the words that need more practice, plus round history.
+- **Analytics**: a per-deck ranking of the words that need more practice, a permanent list of words ever graded Again or Hard, plus round history.
 - **Targeted drills**: drill your 20 weakest words, 20 unseen words, or the words you just missed.
 - **Automatic saving**: results, decks and paste history are stored in the browser, with a JSON backup you can copy and restore.
 - **Light and dark mode**: follows the system setting. Works on desktop and mobile.
@@ -19,27 +19,10 @@ A Kahoot-style vocabulary quiz for memorizing and revising a language (built aro
 ## Quick start
 
 1. Open `vocab-drill.html` in a modern browser (Chrome, Edge, Firefox, Safari). No installation is needed.
-2. Import a word list (see below).
+2. Paste a word list (see below).
 3. Choose your round settings and press **Play**.
 
-An internet connection is needed the first time the page loads, because the Excel reader library is loaded from a CDN (see [Dependencies](#dependencies)).
-
 ## Word list format
-
-### Excel / CSV file
-
-| Korean | English |
-|---|---|
-| 항목 | Item |
-| 필수 | Required/Essential |
-
-- The first row is the header. The two header names become the deck's column names.
-- Only the first two columns of the first sheet are read.
-- Rows with an empty cell, and duplicate pairs, are skipped.
-- A deck needs at least **4 valid word pairs**.
-- The deck is named after the file name. Importing a file with the same name again updates that deck and **keeps your stats** for words that are still in it.
-
-### Pasted text
 
 Copy rows **without a header**, for example:
 
@@ -53,6 +36,7 @@ Each line is split on the first separator found, checked in this order: tab, `;`
 - Pasted words go into a deck called **Pasted words** (columns Korean / English). Duplicates are skipped.
 - Every paste is saved immediately and listed under **Paste history** on the home screen (date and time, rows pasted, how many were new, and the words themselves).
 - If the browser blocks direct clipboard access, a text box appears. Paste into it with Ctrl+V (or long-press and Paste on a phone) and the words are added right away.
+- A deck needs at least **4 word pairs** for quiz rounds. Flashcards work with fewer.
 
 ## Playing a round
 
@@ -67,6 +51,28 @@ Each line is split on the first separator found, checked in this order: tab, `;`
 - **Keyboard**: press `1`–`4` to answer, and `Enter` or `Space` to go to the next question.
 - A correct answer scores `500 + 500 × (time left ÷ time limit)`, plus `50` per streak step (the bonus is capped at 5 steps). Wrong answers and timeouts score 0 and reset the streak.
 - At the end you see your score, accuracy, best streak and the words you missed.
+
+## Reviewing flashcards
+
+Each deck has a **Review** button on the home screen. **Review cards** in Round settings sets the session size (`0` = all cards). Due cards are queued before new cards.
+
+1. Read the front (column 1 or column 2, depending on **Direction**).
+2. Click the card, tap it, or press `Space` / `Enter` to reveal the answer.
+3. Grade yourself with `1`–`4` or the four buttons:
+
+| Grade | Effect |
+|---|---|
+| Again (`1`) | Ease drops, the card returns to learning, and it is repeated later in the round (due in 1 minute). |
+| Hard (`2`) | Ease drops slightly; a new card waits 10 minutes, otherwise the interval grows by 1.2×. |
+| Good (`3`) | A new card is scheduled 1 day out; otherwise the interval is multiplied by the card's ease. |
+| Easy (`4`) | Ease rises; a new card is scheduled 3 days out, otherwise the interval is multiplied by ease × 1.3, minimum 2 days. |
+
+- Ease is clamped to `1.3`–`3.0`; interval is stored in days, due date in milliseconds.
+- **End** finishes the session and shows grade counts, still-due cards, the cards marked Again or Hard in that session, and a **Keep reviewing** button.
+- A word's Again and Hard counts are permanent. A later Good or Easy grade does not remove it from **Analytics → Ever marked Again or Hard**.
+- The session limit applies to the initial queue; cards graded Again repeat within that session, so total card views can exceed the limit.
+- The card front shows when the card is next scheduled and its current ease.
+- Direction is shared with quiz rounds: Mixed picks a random direction per card.
 
 ## How "needs more practice" is calculated
 
@@ -103,17 +109,20 @@ Structure of the JSON:
       "colB": "English",
       "words": [
         { "k": "항목|Item", "a": "항목", "b": "Item",
-          "s": { "n": 4, "c": 3, "t": 21.5, "last": 1730000000000 } }
+          "s": { "n": 4, "c": 3, "t": 21.5, "last": 1730000000000 },
+          "fs": { "d": 1730000000000, "i": 6, "e": 2.5, "r": 5, "l": 1, "h": 2 } }
       ]
     }
   },
   "sessions": [ { "id": "My deck", "date": 1730000000000, "n": 20, "ok": 16, "score": 12450 } ],
   "pastes":   [ { "date": 1730000000000, "deck": "Pasted words", "n": 5, "added": 4, "words": [ { "a": "항목", "b": "Item" } ] } ],
-  "cfg":      { "dir": "mix", "n": 20, "sec": 15, "focus": true }
+  "cfg":      { "dir": "mix", "n": 20, "cards": 20, "sec": 15, "focus": true }
 }
 ```
 
-`s` holds a word's stats: `n` = tries, `c` = correct answers, `t` = total seconds spent, `last` = time of the last answer (`null` until the word is answered for the first time).
+`s` holds a word's quiz stats: `n` = tries, `c` = correct answers, `t` = total seconds spent, `last` = time of the last answer (`null` until the word is answered for the first time).
+
+`fs` holds a word's flashcard schedule: `d` = due time (ms), `i` = interval in days (0 = learning), `e` = ease, `r` = number of reviews, `l` = number of times graded Again, `h` = number of times graded Hard. Both are permanent and are not reset by later Good/Easy grades. A word without `fs` is a new card.
 
 Notes:
 
@@ -124,9 +133,7 @@ Notes:
 
 ## Dependencies
 
-- [SheetJS](https://sheetjs.com/) 0.18.5, loaded from `cdnjs.cloudflare.com`, for reading Excel files.
-
-To use the app fully offline, download that script and reference it locally in the `<script src>` tag at the top of the HTML file.
+None. The app is a single self-contained HTML file and works offline.
 
 ## Project layout
 
@@ -135,14 +142,14 @@ vocab-drill.html   # the whole app: HTML + CSS + JavaScript
 README.md
 ```
 
-Inside the HTML file the script is split into three parts: **Home** (import, decks, settings, paste history, backup), **Quiz** (round logic and scoring) and **Analytics** (ranking and drills).
+Inside the HTML file the script is split into four parts: **Home** (paste import, decks, settings, paste history, backup), **Quiz** (round logic and scoring), **Flashcards** (spaced-repetition scheduling) and **Analytics** (ranking and drills).
 
 ## Known limitations
 
-- Multiple-choice only. There is no typing mode yet.
+- No typing mode: quiz answers are multiple choice, and flashcard grades are self-assessed.
 - Each word has a single accepted answer. A meaning like `Required/Essential` is one answer string.
 - Pasted words always go to the "Pasted words" deck.
-- No single-word editing or deleting. To remove words, re-import a corrected file under a new name, or restore an edited backup.
+- No single-word editing or deleting. To remove words, restore an edited backup.
 - Data is not synced between devices. Use the JSON backup.
 
 ## Ideas for later
