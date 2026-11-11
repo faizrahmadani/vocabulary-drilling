@@ -14,7 +14,7 @@ A Kahoot-style vocabulary quiz for memorizing and revising a language (built aro
 - **Analytics**: a per-deck ranking of the words that need more practice, a permanent list of words ever graded Again or Hard, plus round history.
 - **Targeted drills**: drill your 20 weakest words, 20 unseen words, or the words you just missed.
 - **Automatic saving**: results, decks and paste history are stored in the browser, with a JSON backup you can copy and restore.
-- **Light and dark mode**: follows the system setting. Works on desktop and mobile.
+- **Light and dark mode**: toggle in the home header; follows the system setting until you choose, then remembers your choice. Works on desktop and mobile.
 
 ## Quick start
 
@@ -34,7 +34,7 @@ Copy rows **without a header**, for example:
 Each line is split on the first separator found, checked in this order: tab, `;`, `|`, ` - `, `,`. Excel and Sheets copy as tab-separated text, so no extra work is needed. Surrounding quotes are removed.
 
 - Pasted words go into a deck called **Pasted words** (columns Korean / English). Duplicates are skipped.
-- Every paste is saved immediately and listed under **Paste history** on the home screen (date and time, rows pasted, how many were new, and the words themselves).
+- Every paste is saved immediately and listed under **Paste history** on the home screen (date and time, rows pasted, how many were new, and the words themselves). The trash button clears the history after confirmation; deck words and stats stay.
 - If the browser blocks direct clipboard access, a text box appears. Paste into it with Ctrl+V (or long-press and Paste on a phone) and the words are added right away.
 - A deck needs at least **4 word pairs** for quiz rounds. Flashcards work with fewer.
 
@@ -69,6 +69,7 @@ Each deck has a **Review** button on the home screen. **Review cards** in Round 
 
 - Ease is clamped to `1.3`–`3.0`; interval is stored in days, due date in milliseconds.
 - **End** finishes the session and shows grade counts, still-due cards, the cards marked Again or Hard in that session, and a **Keep reviewing** button.
+- **Copy list** on the session summary or in **Analytics → Ever marked Again or Hard** copies those words as `column 1` + tab + `column 2`, one pair per line, ready to paste into Excel or back into the app.
 - A word's Again and Hard counts are permanent. A later Good or Easy grade does not remove it from **Analytics → Ever marked Again or Hard**.
 - The session limit applies to the initial queue; cards graded Again repeat within that session, so total card views can exceed the limit.
 - The card front shows when the card is next scheduled and its current ease.
@@ -133,13 +134,14 @@ Notes:
 
 ## Dependencies
 
-None. The app is a single self-contained HTML file and works offline.
+The app has no JavaScript dependencies and still works offline. The redesigned home loads Google Fonts (Bricolage Grotesque, Noto Sans, Noto Sans KR); without a network connection, the system font fallbacks are used.
 
 ## Project layout
 
 ```
-vocab-drill.html   # the whole app: HTML + CSS + JavaScript
+Vocab Drill.html   # the whole app: HTML + CSS + JavaScript
 README.md
+backup/            # pre-redesign copies
 ```
 
 Inside the HTML file the script is split into four parts: **Home** (paste import, decks, settings, paste history, backup), **Quiz** (round logic and scoring), **Flashcards** (spaced-repetition scheduling) and **Analytics** (ranking and drills).

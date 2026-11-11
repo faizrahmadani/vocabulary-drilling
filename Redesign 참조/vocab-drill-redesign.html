@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vocab Drill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#110f1e; --bg2:#1a1730; --surface:#1d1a35; --line:#322e55;
+  --text:#ece9f8; --muted:#9a95bd; --accent:#8b7cf6; --accent-ink:#14102e;
+  --good:#5ee0b4; --warn:#f6b85e;
+  --display:'Bricolage Grotesque','Noto Sans',system-ui,sans-serif;
+  --body:'Noto Sans','Noto Sans KR',system-ui,sans-serif;
+  --kr:'Noto Sans KR','Noto Sans',sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;min-height:100vh;color:var(--text);font:400 15px/1.55 var(--body);
+  background:
+    radial-gradient(900px 500px at 85% -10%,rgba(139,124,246,.18),transparent 60%),
+    var(--bg);
+  padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);
+}
+:focus-visible{outline:2px solid var(--good);outline-offset:3px;border-radius:8px}
+.wrap{max-width:1040px;margin:0 auto;padding:40px 24px 72px}
+h1,h2{font-family:var(--display);margin:0;letter-spacing:-.02em}
+h1{font-size:clamp(34px,6vw,52px);font-weight:800;line-height:1.05}
+h2{font-size:20px;font-weight:700}
+.lead{color:var(--muted);max-width:46ch;margin:12px 0 0}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;margin-bottom:56px}
+.paste-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:28px}
+.btn{font:600 15px var(--body);border:0;border-radius:12px;padding:13px 20px;cursor:pointer;transition:transform .12s,background .12s}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{background:#9d90fa}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn-ghost:hover{background:var(--bg2)}
+.hint{color:var(--muted);font-size:13px;max-width:30ch}
+#status{min-height:1.4em;margin:12px 0 0;font-size:13px;color:var(--good)}
+#status.err{color:var(--warn)}
+
+/* flip card: the one memorable thing */
+.card-wrap{perspective:1000px;justify-self:center;width:min(100%,340px)}
+.flash{position:relative;aspect-ratio:4/5;cursor:pointer;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.3,.7,.2,1);border:0;background:none;padding:0;width:100%;color:inherit;font:inherit}
+.flash.flipped{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:1px solid var(--line);box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+.front{background:linear-gradient(160deg,#272250,#1b1836)}
+.back{background:var(--accent);color:var(--accent-ink);transform:rotateY(180deg);border-color:transparent}
+.word{font:500 clamp(54px,9vw,76px)/1 var(--kr)}
+.back .word{font:800 38px/1.1 var(--display)}
+.tiny{font-size:13px;color:var(--muted)}
+.back .tiny{color:rgba(20,16,46,.7)}
+
+/* sections */
+section{margin-top:44px}
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px}
+.sec-head span{color:var(--muted);font-size:13px}
+.empty{border:1px dashed var(--line);border-radius:16px;padding:28px;color:var(--muted);text-align:center}
+.decks{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.deck{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:6px}
+.deck b{font:700 17px var(--display)}
+.deck small{color:var(--muted)}
+.deck .meter{height:6px;border-radius:99px;background:var(--bg);overflow:hidden;margin-top:8px}
+.deck .meter i{display:block;height:100%;background:var(--good);width:0}
+.deck .btn{margin-top:12px;padding:10px 14px;font-size:14px}
+
+/* settings */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:8px 24px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:16px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row label,.row .lbl{font-weight:500}
+.row small{display:block;color:var(--muted);font-weight:400;font-size:13px}
+.seg{display:inline-flex;background:var(--bg);border-radius:12px;padding:4px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 14px var(--body);padding:8px 14px;border-radius:9px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.stepper{display:inline-flex;align-items:center;background:var(--bg);border-radius:12px}
+.stepper button{width:38px;height:38px;border:0;background:none;color:var(--text);font-size:18px;cursor:pointer;border-radius:12px}
+.stepper button:hover{background:var(--bg2)}
+.stepper input{width:48px;text-align:center;background:none;border:0;color:var(--text);font:600 15px var(--body);-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none}
+.range{display:flex;align-items:center;gap:12px}
+input[type=range]{accent-color:var(--accent);width:160px}
+.range output{min-width:3ch;font-weight:600}
+.switch{position:relative;width:46px;height:26px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.switch span{position:absolute;inset:0;background:var(--bg);border-radius:99px;transition:background .15s;pointer-events:none}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+.switch input:checked+span{background:var(--good)}
+.switch input:checked+span::after{transform:translateX(20px);background:var(--accent-ink)}
+.switch input:focus-visible+span{outline:2px solid var(--good);outline-offset:3px}
+
+/* history */
+.history{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.history li{display:flex;justify-content:space-between;gap:16px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.history li:last-child{border-bottom:0}
+.history li span:last-child{color:var(--muted);font-size:13px}
+.backup{display:flex;flex-wrap:wrap;gap:12px}
+#backupOut{display:none;width:100%;margin-top:14px;min-height:140px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:14px;font:13px/1.5 ui-monospace,monospace}
+
+@media (max-width:760px){
+  .hero{grid-template-columns:1fr;gap:28px}
+  .card-wrap{order:-1;width:min(100%,240px)}
+  .row{flex-direction:column;align-items:flex-start;gap:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+  <header class="hero">
+    <div>
+      <h1>Vocab Drill</h1>
+      <p class="lead">Tempel daftar kata, ulangi sebagai flashcard, mainkan ronde cepat, lalu lihat kata mana yang masih lemah.</p>
+      <div class="paste-row">
+        <button class="btn btn-primary" id="pasteBtn" type="button">Paste from clipboard</button>
+        <span class="hint">Salin baris dua kolom (Korean, English) tanpa header, lalu tekan Paste.</span>
+      </div>
+      <p id="status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="card-wrap">
+      <button class="flash" id="flash" type="button" aria-label="Balik kartu contoh">
+        <div class="face front"><div class="word">단어</div><div class="tiny">Ketuk untuk membalik</div></div>
+        <div class="face back"><div class="word">word</div><div class="tiny">단어</div></div>
+      </button>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>Your decks</h2><span id="deckCount"></span></div>
+    <div id="decks" class="decks"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Round settings</h2></div>
+    <div class="panel">
+      <div class="row">
+        <div class="lbl">Direction</div>
+        <div class="seg" id="dir" role="group" aria-label="Direction">
+          <button type="button" aria-pressed="true" data-v="12">Column 1 → 2</button>
+          <button type="button" aria-pressed="false" data-v="21">Column 2 → 1</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lbl">Questions<small>0 = semua kata</small></div>
+        <div class="stepper" data-step="5"><button type="button" aria-label="Kurangi">−</button><input type="number" min="0" value="0" aria-label="Questions"><button type="button" aria-label="Tambah">+</button></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Review cards<small>0 = semua kartu</small></div>
+        <div class="stepper" data-step="5"><button type="button" aria-label="Kurangi">−</button><input type="number" min="0" value="0" aria-label="Review cards"><button type="button" aria-label="Tambah">+</button></div>
+      </div>
+      <div class="row">
+        <label for="secs">Seconds per question</label>
+        <div class="range"><input type="range" id="secs" min="5" max="60" step="5" value="15"><output id="secsOut">15</output></div>
+      </div>
+      <div class="row">
+        <label for="weak">Show weak words more often<small>Kata yang sering salah muncul lebih sering</small></label>
+        <div class="switch"><input type="checkbox" id="weak" checked><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Paste history</h2></div>
+    <div id="history"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Backup</h2></div>
+    <div class="backup">
+      <button class="btn btn-ghost" id="showBackup" type="button">Show backup (JSON)</button>
+      <button class="btn btn-ghost" id="restore" type="button">Restore from JSON</button>
+      <textarea id="backupOut" aria-label="Backup JSON" spellcheck="false"></textarea>
+    </div>
+  </section>
+</main>
+
+<script>
+(function(){
+  var state={decks:[],history:[]};
+  var $=function(s){return document.querySelector(s)};
+  var status=$('#status');
+
+  function say(msg,err){status.textContent=msg;status.className=err?'err':''}
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+  function render(){
+    var d=$('#decks');
+    $('#deckCount').textContent=state.decks.length?state.decks.length+' deck':'';
+    d.innerHTML=state.decks.length?state.decks.map(function(k){
+      return '<div class="deck"><b>'+esc(k.name)+'</b><small>'+k.words.length+' kata</small>'+
+        '<div class="meter" title="Progres hafalan"><i style="width:'+(k.mastered||0)+'%"></i></div>'+
+        '<button class="btn btn-ghost" type="button">Start round</button></div>';
+    }).join(''):'<div class="empty">Belum ada deck. Tempel daftar kata untuk mulai.</div>';
+    var h=$('#history');
+    h.innerHTML=state.history.length?'<ul class="history">'+state.history.map(function(x){
+      return '<li><span>'+esc(x.name)+' · '+x.count+' kata</span><span>'+esc(x.time)+'</span></li>';
+    }).join('')+'</ul>':'<div class="empty">Belum ada yang ditempel.</div>';
+  }
+
+  $('#pasteBtn').addEventListener('click',function(){
+    if(!navigator.clipboard||!navigator.clipboard.readText){say('Browser tidak mengizinkan akses clipboard.',true);return}
+    navigator.clipboard.readText().then(function(t){
+      var rows=t.split(/\r?\n/).map(function(l){return l.split('\t')}).filter(function(c){return c.length>=2&&c[0].trim()&&c[1].trim()});
+      if(!rows.length){say('Tidak ada baris dua kolom di clipboard.',true);return}
+      var n=state.decks.length+1, now=new Date().toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+      state.decks.push({name:'Deck '+n,words:rows.map(function(c){return[c[0].trim(),c[1].trim()]}),mastered:0});
+      state.history.unshift({name:'Deck '+n,count:rows.length,time:now});
+      say(rows.length+' kata ditambahkan ke Deck '+n+'.');render();
+    }).catch(function(){say('Izin clipboard ditolak.',true)});
+  });
+
+  $('#flash').addEventListener('click',function(){this.classList.toggle('flipped')});
+
+  $('#dir').addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b)return;
+    this.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b)});
+  });
+
+  document.querySelectorAll('.stepper').forEach(function(s){
+    var i=s.querySelector('input'),st=+s.dataset.step,bs=s.querySelectorAll('button');
+    bs[0].onclick=function(){i.value=Math.max(0,(+i.value||0)-st)};
+    bs[1].onclick=function(){i.value=(+i.value||0)+st};
+  });
+
+  $('#secs').addEventListener('input',function(){$('#secsOut').textContent=this.value});
+
+  $('#showBackup').addEventListener('click',function(){
+    var o=$('#backupOut');o.style.display='block';o.value=JSON.stringify(state,null,2);
+  });
+  $('#restore').addEventListener('click',function(){
+    var o=$('#backupOut');o.style.display='block';
+    if(!o.value.trim()){o.placeholder='Tempel JSON backup di sini, lalu tekan Restore lagi.';o.focus();return}
+    try{var j=JSON.parse(o.value);state.decks=j.decks||[];state.history=j.history||[];render();say('Backup dipulihkan.')}
+    catch(e){say('JSON tidak valid.',true)}
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
