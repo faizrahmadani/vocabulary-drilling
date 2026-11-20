@@ -33,7 +33,7 @@ Copy rows **without a header**, for example:
 
 Each line is split on the first separator found, checked in this order: tab, `;`, `|`, ` - `, `,`. Excel and Sheets copy as tab-separated text, so no extra work is needed. Surrounding quotes are removed.
 
-- Pasted words go into a deck called **Pasted words** (columns Korean / English). Duplicates are skipped.
+- Pasted words go into a deck called **Pasted words** (columns Korean / English). Exact duplicate `column 1 + column 2` pairs are skipped, and the status line plus paste history show how many were skipped.
 - Every paste is saved immediately and listed under **Paste history** on the home screen (date and time, rows pasted, how many were new, and the words themselves). The trash button clears the history after confirmation; deck words and stats stay.
 - If the browser blocks direct clipboard access, a text box appears. Paste into it with Ctrl+V (or long-press and Paste on a phone) and the words are added right away.
 - A deck needs at least **4 word pairs** for quiz rounds. Flashcards work with fewer.

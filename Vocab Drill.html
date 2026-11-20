@@ -207,7 +207,7 @@ function home(){
     <div class="rd-meter" title="Accuracy"><i style="width:${a||0}%"></i></div>
     <div class="rd-deck-btns"><button class="btn btn-primary" data-play="${id}">Play</button><button class="btn btn-ghost" data-review="${id}">Review${n?' ('+n+')':''}</button><button class="btn btn-ghost" data-stats="${id}">Analytics</button><button class="btn btn-danger" data-del="${id}">Delete</button></div>
   </article>`}).join('');
-  const pasteHistory=db.pastes.length?`<div class="rd-history">${db.pastes.slice(-20).reverse().map(p=>`<details><summary><b>${new Date(p.date).toLocaleString()}</b><span>${p.n} rows pasted, ${p.added} new → ${esc(p.deck)}</span></summary><div class="tbl rd-history-body"><table>${p.words.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td></tr>`).join('')}</table></div></details>`).join('')}</div>`:'<div class="rd-empty">Nothing pasted yet.</div>';
+  const pasteHistory=db.pastes.length?`<div class="rd-history">${db.pastes.slice(-20).reverse().map(p=>`<details><summary><b>${new Date(p.date).toLocaleString()}</b><span>${p.n} rows · ${p.added} new${p.n>p.added?` · ${p.n-p.added} duplicate${p.n-p.added===1?'':'s'}`:''} → ${esc(p.deck)}</span></summary><div class="tbl rd-history-body"><table>${p.words.map(w=>`<tr><td>${esc(w.a)}</td><td>${esc(w.b)}</td></tr>`).join('')}</table></div></details>`).join('')}</div>`:'<div class="rd-empty">Nothing pasted yet.</div>';
   app.innerHTML=`<div class="home">
     <header class="rd-hero">
       <div>
@@ -286,7 +286,8 @@ function addPasted(text){
   rows.forEach(r=>{const k=r.a+'|'+r.b;if(!have.has(k)){have.add(k);d.words.push({k,a:r.a,b:r.b,s:null});added++}});
   db.pastes.push({date:Date.now(),deck:name,n:rows.length,added,words:rows});
   save();home();
-  $('#msg').textContent=`Pasted ${rows.length} rows (${added} new) into “${name}”.`+(d.words.length<4?` Add ${4-d.words.length} more words to play this deck.`:'');
+  const skipped=rows.length-added;
+  $('#msg').textContent=`Pasted ${rows.length} rows: ${added} new${skipped?`, ${skipped} duplicate${skipped===1?'':'s'} skipped`:''}. “${name}” now has ${d.words.length} unique word${d.words.length===1?'':'s'}.`+(d.words.length<4?` Add ${4-d.words.length} more words to play this deck.`:'');
 }
 /* ---------- Quiz ---------- */
 let Q=null;
