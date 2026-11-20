@@ -6,40 +6,42 @@ The agent workflow contract lives in [`../AGENTS.md`](../AGENTS.md).
 
 ## 1. What the system is
 
-A Kahoot-style + Anki-style vocabulary drill. Everything is in a single static file,
-`Vocab Drill.html`: HTML, CSS, and vanilla JavaScript. There is no server, no build step,
-no package manifest, no runtime dependency, and no network requirement (Google Fonts are
-progressive enhancement with system fallbacks).
+A Kahoot-style + Anki-style vocabulary drill built as a **Vue 3 single-page app with Vite**.
+Screens are Vue single-file components; shared state and pure logic live in `src/store.js`.
+There is no server and no runtime dependency beyond Vue; the production output is a static
+bundle in `dist/`. Google Fonts are progressive enhancement with system fallbacks.
 
 The only persistence is browser `localStorage` under the key `vocabdrill.v1`. Backups are
-copy/paste JSON because a `file://` page cannot write to disk.
+copy/paste JSON because the app writes no files to disk.
 
 ## 2. Architecture map
 
-`Vocab Drill.html` has one mount point, `<div id="app"></div>`, and renders screens into it.
-Line numbers drift — use the section comment markers to navigate.
-
-| Region | Marker / symbols | Responsibility |
+| Region | File / symbols | Responsibility |
 |---|---|---|
-| Theme bootstrap | inline `<script>` in `<head>` | Reads `vocabdrill.theme` before first paint to avoid a light/dark flash. |
-| Styling | `<style>` | CSS variables for light/dark, responsive layout, card/option styles, redesign classes. |
-| Shell | `<div id="app"></div>` | Single render target for Home, Quiz, Flashcards, Analytics. |
-| Core state | `KEY`, `$`, `app`, `load()`, `save()`, `weak()` | Load/save the `db` object; smoothed weakness score used for weighting and ranking. |
-| Home | `/* ---------- Home ---------- */` | Deck list and settings, paste import (`parsePaste`, `addPasted`), paste history, JSON backup/restore, theme toggle. |
-| Quiz | `/* ---------- Quiz ---------- */` | `start`, `ask`, `pick`, `next`, `finish`. Weighted shuffle, 4 options, timer, score/streak, missed words. |
-| Flashcards | `/* ---------- Flashcards (spaced repetition) ---------- */` | `deckDue`, `review`, `drawCard`, `reveal`, `rate`, `finishReview`. Due queue, ease/interval scheduling, session summary. |
-| Analytics | `/* ---------- Analytics ---------- */` | `stats`. Weakness ranking, "ever graded Again or Hard", targeted drills. |
+| Theme bootstrap | inline `<script>` in `index.html` | Reads `vocabdrill.theme` before first paint to avoid a light/dark flash. |
+| Entry / styles | `src/main.js`, `src/style.css` | Mounts the app; global CSS variables for light/dark, responsive layout, card/option styles. |
+| Core state | `src/store.js` — `db`, `save()`, `replaceDb()`, `normalize()`, `weak()` | Reactive store + defensive persistence; smoothed weakness score used for weighting and ranking. |
+| Theme | `src/useTheme.js`, `components/ThemeToggle.vue` | Reactive `theme` ref mirrored to `<html data-theme>`. |
+| Screen machine | `src/App.vue` | One view mounted at a time; navigation events (`home`, `play`, `review`, `stats`, `drill`). |
+| Home | `components/HomeView.vue` — `/* ---------- Home ---------- */` | Deck list and settings, paste import (`parsePaste`, `addPasted`), paste history, JSON backup/restore. |
+| Quiz | `components/QuizView.vue` — `/* ---------- Quiz ---------- */` | `start`, `ask`, `pick`, `next`, `finish`. Weighted shuffle, 4 options, timer, score/streak, missed words. |
+| Flashcards | `components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | `review`, `drawCard`, `reveal`, `rate`, `finishReview`. Due queue, ease/interval scheduling, session summary. |
+| Analytics | `components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever graded Again or Hard", targeted drills. |
 
 ### Data flow
 
 ```
 Excel/Sheets paste → parsePaste → addPasted → db.decks[...].words → save()
-        ↓
-   Home (deck list) → Quiz (weighted draw, timer, score) ─┐
-                    → Review (due queue, grade → fs)      ├→ save() → stats/analytics → drills
-                                                          ┘
-   Backup (JSON string) ←→ db ←→ Restore (JSON string)
+         ↓
+    Home (deck list) → Quiz (weighted draw, timer, score) ─┐
+                     → Review (due queue, grade → fs)      ├→ save() → stats/analytics → drills
+                                                           ┘
+    Backup (JSON string) ←→ db ←→ Restore (JSON string)
 ```
+
+Navigation between screens is local component state in `App.vue` (no router dependency).
+Because only one view is mounted at a time, quiz timers and review keyboard listeners are
+torn down in `onUnmounted` when the user navigates away.
 
 ## 3. Data model (`vocabdrill.v1`)
 
@@ -73,7 +75,8 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 
 ## 4. Operations
 
-- **Run:** open `Vocab Drill.html` in a modern browser. No install, no server.
+- **Run:** `npm install` then `npm run dev` (Node.js 22+). Open the printed local URL.
+- **Build:** `npm run build` → static `dist/`; `npm run preview` serves it locally.
 - **Import:** copy two headerless columns from Excel/Sheets → **Paste from clipboard**.
   Separator precedence: tab, `;`, `|`, ` - `, `,`. Exact `a + b` duplicates are skipped.
   A deck needs ≥4 pairs for quiz rounds; flashcards work with fewer.
@@ -82,7 +85,7 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 - **Move devices:** data is per browser and per page address; use the JSON backup.
 - **Reset test state:** clear only `localStorage['vocabdrill.v1']` (and `vocabdrill.theme`
   for theme) in a throwaway browser profile. Never clear the user's real profile.
-- **Verify a change:** `node scripts/verify.mjs "Vocab Drill.html"`, then a manual browser
+- **Verify a change:** `npm run verify` (structural checks + `vite build`), then a manual browser
   smoke test. See [TESTING.md](TESTING.md).
 
 ## 5. Known limitations / gotchas
@@ -95,6 +98,7 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 - Deleting a deck also deletes its round history. Paste history keeps all entries (home
   shows the latest 20).
 - Google Fonts require network; without it the system font stack is used.
-- Restore accepts arbitrary JSON from the clipboard: malformed shapes must be handled
-  defensively (`load()` already wraps parsing in `try/catch`). Any change here is a
-  red-team priority — see `AGENTS.md` §6.
+- Restore accepts arbitrary JSON from the clipboard: `normalize()` in `src/store.js` handles
+  malformed/wrong-typed shapes defensively.
+- `Vocab Drill.html` is kept only as the legacy reference the Vue app was ported from; it is
+  not a build input or verification gate.

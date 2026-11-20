@@ -25,7 +25,8 @@ Fill in ALL THREE required parts. Delete this comment before submitting.
   - Attacked:
   - Survived:
   - Real weaknesses found and fixed (or "none found"):
-- **Verification run (once, after red-team):** `node scripts/verify.mjs "Vocab Drill.html"` → <!-- pass/fail + counts -->
+  - If explicitly skipped by the requester, say so here (do not silently omit the gate).
+- **Verification run (once, after red-team):** `npm run verify` → <!-- pass/fail + counts -->
 - **Manual browser smoke test:** <!-- platforms/viewports/themes checked, or "not a user-journey change" -->
 - **Docs updated in this PR:** <!-- links to README.md / docs/ / docs/specs/ files, or "N/A — no user-journey change" -->
 - **Known holes / documented gaps:** <!-- e.g. no unit framework, no mutation testing; see AGENTS.md §10 -->
