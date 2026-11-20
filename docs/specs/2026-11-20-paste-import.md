@@ -2,8 +2,9 @@
 
 ## Status / surface
 
-Current behavior as of 2026-11-20. Surface: **Home** screen (`/* ---------- Home ---------- */`
-in `Vocab Drill.html`), functions `parsePaste()` and `addPasted()`.
+Current behavior as of 2026-11-20. Surface: **Home** screen
+(`src/components/HomeView.vue`, marker `/* ---------- Home ---------- */`); helpers
+`parsePaste()` in `src/store.js` and `addPasted()` in `HomeView.vue`.
 
 ## AS IS
 

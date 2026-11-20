@@ -14,20 +14,20 @@
 |---|---|
 | `<default-branch>` | `main` (protected by convention) |
 | `<git-host>` | GitHub — `https://github.com/faizrahmadani/vocabulary-drilling.git` |
-| Product artifact | `Vocab Drill.html` — the entire app (HTML + CSS + JS), no build step |
-| `<module-test-cmd>` / `<ui-test-cmd>` / `<e2e-cmd>` | `node scripts/verify.mjs "Vocab Drill.html"` (zero-dependency smoke/syntax check). This is a **documented partial gap** — see §10. |
-| `<mutation-tool>` | **Not available** — no mutation tool for inline browser JS in a single-file app. Documented gap, see §10. |
+| Product artifact | Vue 3 + Vite SPA: `index.html` + `src/` → static bundle in `dist/` |
+| `<module-test-cmd>` / `<ui-test-cmd>` / `<e2e-cmd>` | `npm run verify` = `node scripts/verify.mjs` (structural smoke) + `vite build` (compile gate). No unit/E2E runner — **documented partial gap**, see §10. |
+| `<mutation-tool>` | **Not available** — no mutation tool configured for the project. Documented gap, see §10. |
 | `<docs-dir>` | `docs/` (architecture + operations) |
 | `<spec-dir>` | `docs/specs/` (user-journey specs) |
-| `<lockfile>` | **N/A** — zero runtime dependencies, no package manifest, no install step. |
-| `<lint-cmd>` / `<format-cmd>` | `node scripts/verify.mjs` for structural checks; manual style check against §3 conventions. No ESLint/Prettier config by design. |
+| `<lockfile>` | `package-lock.json` — npm, committed. `npm install` before any command. |
+| `<lint-cmd>` / `<format-cmd>` | `npm run verify` for structural/compile checks; manual style check against §3 conventions. No ESLint/Prettier config by design. |
 | `<temp-dir-helper>` | **N/A** — no file-writing code. Browser state lives in `localStorage` (`vocabdrill.v1`). |
 | Browser storage key | `vocabdrill.v1` (all decks, stats, schedules, sessions, pastes, config) |
 
-Commands assume PowerShell on Windows and run from the repository root. Quote the HTML
-filename everywhere — it contains a space. `Redesign 참조/vocab-drill-redesign.html` is a
-static design mock, **not** a product artifact: it is deliberately not a verification gate
-and will fail these checks by design.
+Commands assume PowerShell on Windows and run from the repository root. Requires Node.js 22+
+and npm. `Vocab Drill.html` is kept only as the legacy single-file reference the Vue app was
+ported from; it is **not** a build input or verification gate. `Redesign 참조/vocab-drill-redesign.html`
+is a static design mock, likewise not a product artifact or gate.
 
 ---
 
@@ -90,25 +90,24 @@ After merge, clean up: `git checkout main; git pull --ff-only; git branch -d fea
 ## 3. Testing requirements
 
 - **Enforce a 1:1 test-to-code ratio across layers.** Every new or modified production
-  surface needs corresponding verification. In this single-file app, "layers" are the script
-  sections in §3.1; add checks to `scripts/verify.mjs` or a documented manual case for each
-  changed behavior.
+  surface needs corresponding verification. "Layers" are the Vue components in §3.1; add
+  checks to `scripts/verify.mjs` or a documented manual case for each changed behavior.
 - **Test scoping (default: changed area only).** Unless the user explicitly asks for
-  everything, verify only what the change touches. Here the whole app is one file, so the
-  scoped command is cheap. Run it after the red-team reports and get **one clean green run**
-  gating the PR. If it fails, fix the cause and re-run, recording each run; re-run again after
-  any rebase or PR-modifying push. Never re-run without a fix.
+  everything, verify only what the change touches. The gate is cheap enough for the whole
+  project. Run it after the red-team reports and get **one clean green run** gating the PR.
+  If it fails, fix the cause and re-run, recording each run; re-run again after any rebase or
+  PR-modifying push. Never re-run without a fix.
 
   ```powershell
-  node scripts/verify.mjs "Vocab Drill.html"
+  npm run verify
   ```
 
-  Do **not** run this against `Redesign 참조/vocab-drill-redesign.html` as a gate — that file
-  is a static design mock and fails these product checks by design (see §0).
+  This runs `node scripts/verify.mjs` (structure) then `vite build` (compile). Legacy
+  `Vocab Drill.html` and `Redesign 참조/vocab-drill-redesign.html` are reference/design files,
+  not products or gates (see §0).
 
 - **Conventions for any test code added to this project:**
-  - Pure logic: extract testable helpers where practical, then import/assert them directly.
-    Keep helpers in the same HTML file unless the user approves splitting the app.
+  - Pure logic: keep testable helpers in `src/store.js` and import/assert them directly.
   - State isolation: reset via the app's own API / a fresh `db` object — never by reloading
     modules. For browser runs, use a fresh profile or clear only `localStorage['vocabdrill.v1']`.
   - UI: assert on user-visible text/roles, not implementation details; use role-based
@@ -119,25 +118,26 @@ After merge, clean up: `git checkout main; git pull --ff-only; git branch -d fea
   - Assertions must be **fail-fast with descriptive messages** — never soft assertions.
   - Coverage: happy path, error paths, and edge cases (empty input, `null`, boundary values:
     3 vs 4 word pairs, `0` questions = all, timer limits 3–60, ease clamps 1.3–3.0).
-- **Platform prerequisites:** Node.js 22+ is used only by `scripts/verify.mjs`; the app itself
-  needs only a modern browser. Document any new OS/toolchain prerequisite here rather than
-  silently working around it. External tools: prefer the real thing when available, fall
-  back to a controlled fake so checks pass offline.
+- **Platform prerequisites:** Node.js 22+ and npm are required to install dependencies and
+  run the Vite dev/build/verify commands; the built static app needs only a modern browser.
+  Document any new OS/toolchain prerequisite here rather than silently working around it.
+  External tools: prefer the real thing when available, fall back to a controlled fake so
+  checks pass offline.
 
 ### 3.1 Architecture map (orientation only — line numbers drift)
 
-`Vocab Drill.html` is one document with these regions:
+The product is a Vue 3 + Vite SPA with these regions:
 
 | Region | Where | Responsibility |
 |---|---|---|
-| Head / theme bootstrap | top of file, `<script>` before `<style>` | Applies saved theme before paint to avoid flash. |
-| CSS variables + responsive/light/dark styles | `<style>` block | All styling; no external stylesheet except Google Fonts. |
-| Markup shell | `<div id="app"></div>` | Single mount point; screens are rendered into it. |
-| Core state | `KEY`, `$`, `app`, `load()`, `save()`, `weak()` | `localStorage` persistence and weakness scoring. |
-| **Home** | `/* ---------- Home ---------- */` | Deck list, settings, clipboard/paste import, paste history, JSON backup/restore. |
-| **Quiz** | `/* ---------- Quiz ---------- */` | Round selection, weighted shuffle, options, scoring, timer, finish. |
-| **Flashcards** | `/* ---------- Flashcards (spaced repetition) ---------- */` | Due queue, draw/reveal, `rate()`, ease/interval scheduling, session summary. |
-| **Analytics** | `/* ---------- Analytics ---------- */` | Weakness ranking, "ever Again or Hard", targeted drills. |
+| Head / theme bootstrap | `index.html` inline `<script>` | Applies saved theme before paint to avoid flash. |
+| Entry / styles | `src/main.js`, `src/style.css` | Mounts the app; global light/dark + responsive CSS. |
+| Core state | `src/store.js` — `db`, `save()`, `replaceDb()`, `weak()` | Reactive `localStorage` store and pure logic helpers. |
+| Screen machine | `src/App.vue` | One view mounted at a time; navigation events. |
+| **Home** | `src/components/HomeView.vue` — `/* ---------- Home ---------- */` | Deck list, settings, clipboard/paste import, paste history, JSON backup/restore. |
+| **Quiz** | `src/components/QuizView.vue` — `/* ---------- Quiz ---------- */` | Round selection, weighted shuffle, options, scoring, timer, finish. |
+| **Flashcards** | `src/components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | Due queue, draw/reveal, `rate()`, ease/interval scheduling, session summary. |
+| **Analytics** | `src/components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever Again or Hard", targeted drills. |
 
 Data model and operations are documented in `docs/README.md`. User-journey specs live in
 `docs/specs/`; update the matching spec in the same PR when a journey changes.
@@ -216,7 +216,7 @@ read-only explorer — to actively try to break the feature:
   ≥80% for small focused modules, ≥40% for large ones (>500 lines).
 - For this project, mutation testing is unavailable — report it as a documented gap (§10),
   not a fabricated score. Compensate with explicit edge-case checks and higher branch
-  coverage on the four script sections.
+  coverage on the four screen components.
 
 ---
 
@@ -226,7 +226,7 @@ read-only explorer — to actively try to break the feature:
 - [ ] Test/check written first for new behavior; production code satisfies it.
 - [ ] Mandatory general-purpose red-team subagent ran and produced a written report.
 - [ ] Red-team checks/fixes merged; real bugs fixed; no assertion weakened.
-- [ ] Scoped verification run **once** after red-team: `node scripts/verify.mjs "Vocab Drill.html"` passes.
+- [ ] Scoped verification run **once** after red-team: `npm run verify` passes.
 - [ ] Manual browser smoke test for any user-journey change (desktop + mobile width, light + dark).
 - [ ] Docs updated in the same PR (`README.md`, `docs/`, and `docs/specs/` as applicable).
 - [ ] Commits are atomic, explicit-path staged, and use `type(scope):` messages.
@@ -245,21 +245,22 @@ read-only explorer — to actively try to break the feature:
 - Never invent a coverage or mutation number; document gaps instead.
 - Never bundle unrelated features, cleanup, docs, and tests into one commit.
 - Never add runtime dependencies/build tooling or network requirements without explicit user
-  approval — "no build step, works offline" is a product property.
+  approval. The Vue/Vite toolchain and its install step were explicitly approved by the user
+  for this rewrite; the built static app still works offline with system font fallbacks.
 
 ---
 
 ## 10. Documented gaps (honest, not hidden)
 
-These playbook items do not apply cleanly to a zero-dependency, single-HTML-file app. They are
-recorded here rather than faked:
+These playbook items do not apply cleanly to a Vue/Vite frontend-only app. They are recorded
+here rather than faked:
 
 | Playbook item | Status | Compensation |
 |---|---|---|
-| Unit-test framework / 1:1 test LOC | **Partial.** Only `scripts/verify.mjs` (syntax + structural smoke). No runner for game logic because the JS is inline. | Add a check per changed behavior; manual browser smoke cases documented in `docs/TESTING.md`. Revisit if the user approves extracting JS into modules. |
-| Mutation testing | **Not available.** No inline-browser-JS mutation tool. | Explicit edge-case checks (§3), higher branch coverage on the four sections; never invent a score. |
+| Unit-test framework / 1:1 test LOC | **Partial.** `scripts/verify.mjs` (structural smoke) + `vite build` (compile); no runner for game logic. Helpers now live in importable `src/store.js`, so a runner can be added later. | Add a check per changed behavior; manual browser smoke cases documented in `docs/TESTING.md`. |
+| Mutation testing | **Not available.** No mutation tool configured. | Explicit edge-case checks (§3), higher branch coverage on the four screen components; never invent a score. |
 | E2E framework | **Not available.** | Manual role-based browser smoke tests for every user-journey change. |
-| Lockfile / lint / format configs | **N/A.** No packages to pin. | Style conventions in §3; `node scripts/verify.mjs` for structural checks. |
+| Lint / format configs | **N/A.** No ESLint/Prettier config by design. | Style conventions in §3; `npm run verify` for structural/compile checks. |
 | `.env.example` / secrets | **N/A.** No server, no secrets. | All state is local in `localStorage`. |
 | Temp dirs / fixtures | **N/A.** App writes no files. | Reset state via a fresh `db` or cleared `localStorage['vocabdrill.v1']`. |
 | CI / auto-merge / API token | **Not configured.** | Agent reports the compare URL and stops; the human creates and merges the PR. |
@@ -269,11 +270,14 @@ recorded here rather than faked:
 ## 11. Quick command reference
 
 ```powershell
-# Verify the artifact (after red-team, exactly once before PR)
-node scripts/verify.mjs "Vocab Drill.html"
+# Install once, then develop / build / preview
+npm install
+npm run dev
+npm run build
+npm run preview
 
-# Verify an alternate HTML artifact
-node scripts/verify.mjs "Redesign 참조/vocab-drill-redesign.html"
+# Verify the product (after red-team, exactly once before PR): structure + compile
+npm run verify
 
 # Git hygiene
 git status

@@ -1,7 +1,7 @@
 # Vocab Drill
 This repository contains AI generated code. Please do keep in mind that this project serves solely as a platform for language vocabulary drilling.
 
-A Kahoot-style vocabulary quiz for memorizing and revising a language (built around Korean ↔ English, but it works for any two-column word list). Everything lives in a single HTML file: no server, no build step, no database to install.
+A Kahoot-style vocabulary quiz for memorizing and revising a language (built around Korean ↔ English, but it works for any two-column word list). The app is a Vue 3 single-page app built with Vite; all data stays in the browser with no server or database to install.
 
 
 ## Features
@@ -18,9 +18,19 @@ A Kahoot-style vocabulary quiz for memorizing and revising a language (built aro
 
 ## Quick start
 
-1. Open `vocab-drill.html` in a modern browser (Chrome, Edge, Firefox, Safari). No installation is needed.
-2. Paste a word list (see below).
-3. Choose your round settings and press **Play**.
+Requires Node.js 22+ and npm.
+
+```powershell
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (usually `http://localhost:5173`) in a modern browser (Chrome, Edge,
+Firefox, Safari). To produce a static production bundle in `dist/`, run `npm run build`;
+`npm run preview` serves that bundle locally. To run the project's checks, use `npm run verify`.
+
+1. Paste a word list (see below).
+2. Choose your round settings and press **Play**.
 
 ## Word list format
 
@@ -134,17 +144,35 @@ Notes:
 
 ## Dependencies
 
-The app has no JavaScript dependencies and still works offline. The redesigned home loads Google Fonts (Bricolage Grotesque, Noto Sans, Noto Sans KR); without a network connection, the system font fallbacks are used.
+Runtime: Vue 3. Build tooling: Vite + `@vitejs/plugin-vue` (see `package.json` / `package-lock.json`).
+Once built, the static bundle needs no server-side runtime and works offline. The home screen
+loads Google Fonts (Bricolage Grotesque, Noto Sans, Noto Sans KR); without a network connection,
+the system font fallbacks are used.
 
 ## Project layout
 
 ```
-Vocab Drill.html   # the whole app: HTML + CSS + JavaScript
-README.md
-backup/            # pre-redesign copies
+index.html             # Vite entry: mount point + no-flash theme bootstrap + fonts
+vite.config.js         # Vite config with the Vue plugin
+package.json            # scripts: dev / build / preview / verify
+src/
+  main.js              # createApp(App).mount('#app')
+  style.css            # global styles (light/dark, responsive, cards, quiz, flashcards)
+  store.js             # reactive db, localStorage, and pure logic helpers
+  useTheme.js          # reactive light/dark theme state
+  App.vue              # screen state machine: home / quiz / review / analytics
+  components/
+    HomeView.vue       # decks, paste import, settings, history, backup
+    QuizView.vue       # round logic, options, timer, scoring
+    ReviewView.vue     # spaced-repetition flashcards
+    AnalyticsView.vue  # weakness ranking and targeted drills
+    ThemeToggle.vue    # theme button
+Vocab Drill.html       # legacy single-file reference (kept for comparison; not the product)
+backup/                # pre-redesign copies
 ```
 
-Inside the HTML file the script is split into four parts: **Home** (paste import, decks, settings, paste history, backup), **Quiz** (round logic and scoring), **Flashcards** (spaced-repetition scheduling) and **Analytics** (ranking and drills).
+Each screen is a Vue single-file component with a `/* ---------- <Section> ---------- */` marker.
+Shared state and pure helpers (weakness, shuffle, parsing, scheduling previews) live in `src/store.js`.
 
 ## Known limitations
 

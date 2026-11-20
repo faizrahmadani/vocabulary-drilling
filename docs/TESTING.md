@@ -7,20 +7,21 @@ It supports `AGENTS.md` §3, §7, §10. **Nothing here is a fabricated metric.**
 
 | Layer | Mechanism | Command | Status |
 |---|---|---|---|
-| Artifact syntax/structure | `scripts/verify.mjs` (zero dependencies, Node 22+) | `node scripts/verify.mjs "Vocab Drill.html"` | Reference check — **partial gap** |
-| Game logic (quiz, SRS, weakness, parsing) | No unit-test runner; JS is inline in the HTML | — | **Gap** — see §4 |
+| Structure / scaffold | `scripts/verify.mjs` (zero dependencies, Node 22+) | `node scripts/verify.mjs` | Reference check — **partial gap** |
+| Compile / bundle | Vite production build | `vite build` (via `npm run verify`) | Real compile gate for all Vue SFCs |
+| Game logic (quiz, SRS, weakness, parsing) | No unit-test runner; logic lives in modules imported by components | — | **Gap** — see §4 |
 | UI / state stores | Manual browser smoke test | see §3 | **Gap** — no component runner |
 | E2E | Manual, role-based locators / user-visible assertions | see §3 | **Gap** — no E2E framework |
-| Mutation testing | None available for inline browser JS | — | **Gap** — never invent a score |
+| Mutation testing | None available | — | **Gap** — never invent a score |
 
-`scripts/verify.mjs` fails fast with descriptive messages when: the artifact cannot be read,
-the doctype/charset/viewport/mount point are missing, the documented storage key or the four
-architecture section markers are absent, an inline `<script>` block has a `SyntaxError`, or
-script tags are unbalanced. It **compiles but never executes** the scripts.
+`npm run verify` runs `scripts/verify.mjs` then `vite build`. The structural script fails fast
+with descriptive messages when the entry artifact, package manifest, Vue source tree, the
+documented storage key, or the four architecture section markers are broken, or when an SFC
+has unbalanced tags. The build compiles every component template and script. Neither step
+executes game logic.
 
-Run it **once, after the red-team subagent reports**, not before and not in a loop
-(`AGENTS.md` §1, §5, §6). It is cheap enough to scope to the whole single-file artifact.
-To check another artifact: `node scripts/verify.mjs "Redesign 참조/vocab-drill-redesign.html"`.
+Run the check **once, after the red-team subagent reports**, not before and not in a loop
+(`AGENTS.md` §1, §5, §6). The whole project is one cheap gate.
 
 ## 2. What to add when changing behavior
 
@@ -44,7 +45,8 @@ Behavioral cases worth keeping in the manual suite (happy / error / edge):
 
 For any user-journey change (`AGENTS.md` §4):
 
-1. Open the file in Chrome/Edge **and** Firefox or Safari if available.
+1. `npm run dev` (or `npm run build` + `npm run preview`) and open the local URL in
+   Chrome/Edge **and** Firefox or Safari if available.
 2. Check desktop width and a narrow mobile width.
 3. Check light, dark, and system theme (reload to verify no flash and persistence).
 4. Walk the affected journey end-to-end using the cases in §2.
@@ -54,16 +56,17 @@ For any user-journey change (`AGENTS.md` §4):
 
 ## 4. Documented gaps — how we compensate
 
-- **No unit framework.** Inline JS cannot be imported by a runner. Compensate with explicit
-  edge-case manual cases above and the structural check. If the user ever approves extracting
-  JS into modules, add a real runner here and raise the bar.
-- **No mutation testing.** No tool exists for inline browser JS. Compensate with higher
-  branch coverage on the four sections. Never report a mutation score.
+- **No unit framework.** Game logic is plain functions in `src/store.js` imported by
+  components. They can be tested directly if a runner is added later; today we compensate with
+  explicit edge-case manual cases above and the structural + build checks.
+- **No mutation testing.** No suitable tool is configured. Compensate with higher branch
+  coverage on the four sections. Never report a mutation score.
 - **No E2E framework.** Compensate with the role-based manual smoke procedure.
-- **No lockfile / lint / format config.** Zero dependencies by design. Keep style consistent
-  with the existing file; `node scripts/verify.mjs` catches structural regressions only.
+- **No lint / format config.** Keep style consistent with the existing files; `npm run verify`
+  catches structural and compile regressions only.
 - **No temp-dir/fixture strategy needed.** The app writes no files. Isolate state with a fresh
   browser profile or by clearing only `localStorage['vocabdrill.v1']`.
+- `node_modules/` and `dist/` are generated and gitignored; `package-lock.json` is committed.
 
 A documented gap is better than a hidden one. If a check is flaky or skipped on a platform,
 name it and the reason here — never delete it to get a green run.
