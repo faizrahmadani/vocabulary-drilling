@@ -155,3 +155,19 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;
 @keyframes fin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media (max-width:520px){.opts{grid-template-columns:1fr}.opt{min-height:70px}.fgrade{grid-template-columns:1fr 1fr}.fcard{box-shadow:5px 5px 0 var(--line)}.revbar{font-size:.62rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- Member / login ---------- */
+.rd-title-actions{display:inline-flex;align-items:center;gap:10px}
+.rd-title-actions .btn{padding:8px 14px;font-size:13px}
+.auth{max-width:520px;margin:0 auto}
+.auth-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+.auth-head h1{font-size:26px;margin:0}
+.auth-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;margin:12px 0}
+.auth-card h2{font-size:20px;margin:0 0 8px}
+.auth-card p{margin:0 0 12px}
+.auth-field{display:flex;flex-direction:column;gap:6px;margin:14px 0;font-weight:600}
+.auth-field input{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--fg);font:inherit}
+.auth-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.auth-error{color:var(--r);font-weight:700}
+.auth-ok{color:var(--g);font-weight:700;word-break:break-word}
+button:disabled{opacity:.6;cursor:not-allowed}

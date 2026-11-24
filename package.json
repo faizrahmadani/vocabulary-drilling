@@ -7,10 +7,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "verify": "node scripts/verify.mjs && vite build"
+    "preview": "npm run build && vite preview",
+    "server": "node server/index.js",
+    "test": "node --test tests/auth.test.js tests/config.test.js tests/server.test.js tests/hash-pw.test.js tests/auth-db.test.js",
+    "hash-pw": "node scripts/hash-pw.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "seed-user": "node scripts/seed-user.mjs",
+    "verify": "node scripts/verify.mjs && npm test && vite build"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.3.0",
+    "pg": "^8.23.1",
     "vue": "^3.5.46"
   },
   "devDependencies": {

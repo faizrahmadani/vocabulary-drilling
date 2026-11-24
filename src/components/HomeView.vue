@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { db, save, replaceDb, acc, deckDue, clamp, parsePaste } from '../store.js'
 import ThemeToggle from './ThemeToggle.vue'
 
-const emit = defineEmits(['play', 'review', 'stats'])
+const emit = defineEmits(['play', 'review', 'stats', 'member'])
 
 const msg = ref('')
 const fallbackPaste = ref(false)
@@ -102,7 +102,13 @@ function doRestore() {
   <div class="home">
     <header class="rd-hero">
       <div>
-        <div class="rd-title-row"><h1>Vocab Drill</h1><ThemeToggle /></div>
+        <div class="rd-title-row">
+          <h1>Vocab Drill</h1>
+          <div class="rd-title-actions">
+            <button class="btn btn-ghost" type="button" @click="emit('member')">Member</button>
+            <ThemeToggle />
+          </div>
+        </div>
         <p class="rd-lead">Paste a word list, review it as spaced-repetition flashcards, play quick rounds, then see which words still need work.</p>
         <div class="rd-paste-row">
           <button id="paste" class="btn btn-primary" type="button" @click="pasteFromClipboard">Paste from clipboard</button>
