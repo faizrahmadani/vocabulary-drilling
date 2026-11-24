@@ -61,7 +61,7 @@ onMounted(load)
 
     <div v-else class="auth-card">
       <h2>Member service unavailable</h2>
-      <p class="mut">The local backend is not running, so the session cannot be checked. Your drills still work from the home screen.</p>
+      <p class="mut">The member service is unavailable right now, so the session cannot be checked. Your drills still work from the home screen.</p>
       <div class="auth-actions">
         <button class="btn btn-ghost" type="button" @click="load">Try again</button>
         <button class="btn btn-ghost" type="button" @click="emit('home')">Back home</button>

@@ -6,6 +6,14 @@ const BASE_HEADERS = {
   'x-requested-with': 'XMLHttpRequest',
 }
 
+// Dev/preview: empty → the Vite proxy handles /api same-origin.
+// Production: set VITE_API_BASE to the backend origin (a public URL, not a secret).
+const API_BASE = import.meta.env?.VITE_API_BASE || ''
+
+export function apiUrl(path, base = API_BASE) {
+  return base ? `${String(base).replace(/\/+$/, '')}${path}` : path
+}
+
 export async function api(path, { method = 'GET', body, headers = {}, ...rest } = {}) {
   const options = {
     ...rest,
@@ -16,7 +24,7 @@ export async function api(path, { method = 'GET', body, headers = {}, ...rest } 
   if (body !== undefined) options.body = JSON.stringify(body)
 
   try {
-    const response = await fetch(path, options)
+    const response = await fetch(apiUrl(path), options)
     let data = null
     try { data = await response.json() } catch { /* non-JSON response */ }
     return { ok: response.ok, status: response.status, data }
