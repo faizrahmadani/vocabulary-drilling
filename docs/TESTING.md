@@ -9,16 +9,20 @@ It supports `AGENTS.md` §3, §7, §10. **Nothing here is a fabricated metric.**
 |---|---|---|---|
 | Structure / scaffold | `scripts/verify.mjs` (zero dependencies, Node 22+) | `node scripts/verify.mjs` | Reference check — **partial gap** |
 | Compile / bundle | Vite production build | `vite build` (via `npm run verify`) | Real compile gate for all Vue SFCs |
-| Game logic (quiz, SRS, weakness, parsing) | No unit-test runner; logic lives in modules imported by components | — | **Gap** — see §4 |
+| Game logic (quiz, SRS, weakness, parsing) | `node:test` (built into Node 22) on helpers in `src/store.js` | — | **Gap** — see §4 |
+| Auth logic (bcrypt, HMAC session, env validation) | `node:test` — `tests/auth.test.js`, `tests/config.test.js` | `npm test` | Real bcrypt/HMAC; no DB needed |
+| Auth HTTP endpoints | `node:test` — `tests/server.test.js`, real Express server on port 0 via `fetch` | `npm test` | Fake pool only at the DB boundary |
+| Auth against Postgres | `node:test` — `tests/auth-db.test.js` | `npm test` | Skipped unless `TEST_DATABASE_URL` is supplied |
 | UI / state stores | Manual browser smoke test | see §3 | **Gap** — no component runner |
 | E2E | Manual, role-based locators / user-visible assertions | see §3 | **Gap** — no E2E framework |
 | Mutation testing | None available | — | **Gap** — never invent a score |
 
-`npm run verify` runs `scripts/verify.mjs` then `vite build`. The structural script fails fast
-with descriptive messages when the entry artifact, package manifest, Vue source tree, the
-documented storage key, or the four architecture section markers are broken, or when an SFC
-has unbalanced tags. The build compiles every component template and script. Neither step
-executes game logic.
+`npm run verify` runs `scripts/verify.mjs`, then `npm test` (`node --test` on the four test
+files), then `vite build`. The structural script fails fast with descriptive messages when the
+entry artifact, package manifest, Vue source tree, the documented storage key, the architecture
+markers or the auth boundary (cookie flags, CSRF header, gitignored `.env`) are broken, or when
+an SFC has unbalanced tags. The tests exercise auth logic and real HTTP behavior; the build
+compiles every component template and script. Game logic itself still has no automated runner.
 
 Run the check **once, after the red-team subagent reports**, not before and not in a loop
 (`AGENTS.md` §1, §5, §6). The whole project is one cheap gate.
@@ -40,6 +44,8 @@ Behavioral cases worth keeping in the manual suite (happy / error / edge):
 | Backup/restore | export → import round-trips | malformed/wrong-typed JSON → app still loads | huge arrays, quota exceeded, overwrite confirmation |
 | Theme | toggle persists across reload | blocked storage → system preference | light/dark/system, no-flash on load |
 | Layout | desktop and mobile widths | offline fonts → system fallbacks | safe-area insets |
+| Member login | valid credentials → status shows email; logout → form returns | wrong password / unknown email → same generic error; DB down → generic 401 | empty fields, double submit, tampered cookie, expired session, `SameSite`/`Secure` flags, CSRF header on logout |
+| Member page availability | backend running → `/api/me` resolves | backend stopped → four drill screens still work, Member shows "service unavailable" | refresh keeps session, light/dark theme, mobile width |
 
 ## 3. Manual browser smoke procedure
 
@@ -52,13 +58,17 @@ For any user-journey change (`AGENTS.md` §4):
 4. Walk the affected journey end-to-end using the cases in §2.
 5. Open DevTools console — there must be no new uncaught errors.
 6. Test offline once (devtools offline / no network) to confirm font fallback.
-7. Record exactly what was checked in the PR gate report.
+7. For the Member journey, run `npm run server` in a second terminal alongside `npm run dev`,
+   sign in and out, refresh mid-session, then stop the backend and confirm the drills still work
+   and the Member page degrades to the "service unavailable" card.
+8. Record exactly what was checked in the gate report.
 
 ## 4. Documented gaps — how we compensate
 
-- **No unit framework.** Game logic is plain functions in `src/store.js` imported by
-  components. They can be tested directly if a runner is added later; today we compensate with
-  explicit edge-case manual cases above and the structural + build checks.
+- **No unit framework for game logic.** Game logic is plain functions in `src/store.js`;
+  today we compensate with explicit edge-case manual cases above and the structural + build
+  checks. Auth and config use the built-in `node:test` runner, so no new test dependency was
+  added.
 - **No mutation testing.** No suitable tool is configured. Compensate with higher branch
   coverage on the four sections. Never report a mutation score.
 - **No E2E framework.** Compensate with the role-based manual smoke procedure.
@@ -66,7 +76,13 @@ For any user-journey change (`AGENTS.md` §4):
   catches structural and compile regressions only.
 - **No temp-dir/fixture strategy needed.** The app writes no files. Isolate state with a fresh
   browser profile or by clearing only `localStorage['vocabdrill.v1']`.
-- `node_modules/` and `dist/` are generated and gitignored; `package-lock.json` is committed.
+- **No browser E2E runner.** Member UI assertions are manual; `tests/server.test.js` covers the
+  HTTP contract with a real Express server, but not DOM interactions.
+- **Real DB test is conditional.** `tests/auth-db.test.js` is skipped without
+  `TEST_DATABASE_URL`; the user supplies the connection string. Other tests stub only the DB
+  boundary — bcrypt, HMAC and HTTP are real.
+- `node_modules/`, `dist/` and `.env` are generated/secret and gitignored; `package-lock.json`
+  and `.env.example` are committed.
 
 A documented gap is better than a hidden one. If a check is flaky or skipped on a platform,
 name it and the reason here — never delete it to get a green run.

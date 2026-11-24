@@ -15,7 +15,7 @@
 | `<default-branch>` | `main` (protected by convention) |
 | `<git-host>` | GitHub — `https://github.com/faizrahmadani/vocabulary-drilling.git` |
 | Product artifact | Vue 3 + Vite SPA: `index.html` + `src/` → static bundle in `dist/` |
-| `<module-test-cmd>` / `<ui-test-cmd>` / `<e2e-cmd>` | `npm run verify` = `node scripts/verify.mjs` (structural smoke) + `vite build` (compile gate). No unit/E2E runner — **documented partial gap**, see §10. |
+| `<module-test-cmd>` / `<ui-test-cmd>` / `<e2e-cmd>` | `npm run verify` = `node scripts/verify.mjs` (structural smoke) + `npm test` (`node:test`: auth/config/HTTP/optional DB) + `vite build` (compile gate). No DOM/E2E runner — **documented partial gap**, see §10. |
 | `<mutation-tool>` | **Not available** — no mutation tool configured for the project. Documented gap, see §10. |
 | `<docs-dir>` | `docs/` (architecture + operations) |
 | `<spec-dir>` | `docs/specs/` (user-journey specs) |
@@ -23,6 +23,9 @@
 | `<lint-cmd>` / `<format-cmd>` | `npm run verify` for structural/compile checks; manual style check against §3 conventions. No ESLint/Prettier config by design. |
 | `<temp-dir-helper>` | **N/A** — no file-writing code. Browser state lives in `localStorage` (`vocabdrill.v1`). |
 | Browser storage key | `vocabdrill.v1` (all decks, stats, schedules, sessions, pastes, config) |
+| Member backend | Optional Express API in `server/`: Postgres `users` table, `bcryptjs`, HMAC-SHA256 signed cookie `vd_session`. Local proxy: Vite `/api` → `127.0.0.1:3001`. |
+| Runtime dependencies | `vue`, `express`, `pg`, `bcryptjs` (explicitly approved). Drill screens still work without the backend. |
+| Secrets | `.env` (gitignored) + host env. `.env.example` holds names only. User creates credentials via `npm run hash-pw` / `db:migrate` / `seed-user`; agents never ask for or store passwords. |
 
 Commands assume PowerShell on Windows and run from the repository root. Requires Node.js 22+
 and npm. `Vocab Drill.html` is kept only as the legacy single-file reference the Vue app was
@@ -138,6 +141,8 @@ The product is a Vue 3 + Vite SPA with these regions:
 | **Quiz** | `src/components/QuizView.vue` — `/* ---------- Quiz ---------- */` | Round selection, weighted shuffle, options, scoring, timer, finish. |
 | **Flashcards** | `src/components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | Due queue, draw/reveal, `rate()`, ease/interval scheduling, session summary. |
 | **Analytics** | `src/components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever Again or Hard", targeted drills. |
+| **Member** | `src/components/MemberView.vue`, `LoginView.vue`, `src/api.js` — `/* ---------- Member (protected page) ---------- */`, `/* ---------- Login ---------- */` | Protected page: `GET /api/me`, sign-in form, logout. Only this screen requires a session. |
+| **Auth server** | `server/config.js`, `auth.js`, `db.js`, `index.js` | Fail-fast env config, bcrypt + dummy hash, signed sessions, `pg.Pool`, Express endpoints `/api/health`, `/api/login`, `/api/logout`, `/api/me`. |
 
 Data model and operations are documented in `docs/README.md`. User-journey specs live in
 `docs/specs/`; update the matching spec in the same PR when a journey changes.
@@ -245,8 +250,8 @@ read-only explorer — to actively try to break the feature:
 - Never invent a coverage or mutation number; document gaps instead.
 - Never bundle unrelated features, cleanup, docs, and tests into one commit.
 - Never add runtime dependencies/build tooling or network requirements without explicit user
-  approval. The Vue/Vite toolchain and its install step were explicitly approved by the user
-  for this rewrite; the built static app still works offline with system font fallbacks.
+  approval. Approved: Vue/Vite toolchain for the rewrite; `express`, `pg` and `bcryptjs` for the
+  member backend. The built static app still works offline with system font fallbacks.
 
 ---
 
@@ -264,6 +269,9 @@ here rather than faked:
 | `.env.example` / secrets | **N/A.** No server, no secrets. | All state is local in `localStorage`. |
 | Temp dirs / fixtures | **N/A.** App writes no files. | Reset state via a fresh `db` or cleared `localStorage['vocabdrill.v1']`. |
 | CI / auto-merge / API token | **Not configured.** | Agent reports the compare URL and stops; the human creates and merges the PR. |
+| DOM/E2E runner for Member UI | **Not available.** | `tests/server.test.js` checks the HTTP contract with a real Express server; the Member screen is covered by manual browser smoke in `docs/TESTING.md`. |
+| `TEST_DATABASE_URL` | **User-supplied only.** | `tests/auth-db.test.js` is skipped without it; agents never invent a connection string. |
+| Session revocation / rate limiting | **By design / edge concern.** | Logout clears the cookie but cannot revoke a copied token before `exp`; rotate `VD_SESSION_SECRET` after a compromise. Add rate limiting at the edge for a public deployment. |
 
 ---
 
@@ -276,7 +284,13 @@ npm run dev
 npm run build
 npm run preview
 
-# Verify the product (after red-team, exactly once before PR): structure + compile
+# Member backend (user creates credentials; agent never asks for passwords)
+npm run server
+npm run hash-pw
+npm run db:migrate
+npm run seed-user
+
+# Verify the product (after red-team, exactly once before PR): structure + tests + compile
 npm run verify
 
 # Git hygiene

@@ -36,6 +36,7 @@ The date is the day the spec was first written, not the day it was last edited.
 ## Index
 
 - [2026-11-20 — Paste / import word list](2026-11-20-paste-import.md)
+- [2026-11-24 — Member login (protected page)](2026-11-24-member-login.md)
 
 User-facing feature documentation: [`../../README.md`](../../README.md).
 Architecture and data model: [`../README.md`](../README.md).

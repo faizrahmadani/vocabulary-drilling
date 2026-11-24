@@ -1,7 +1,7 @@
 # Vocab Drill
 This repository contains AI generated code. Please do keep in mind that this project serves solely as a platform for language vocabulary drilling.
 
-A Kahoot-style vocabulary quiz for memorizing and revising a language (built around Korean ↔ English, but it works for any two-column word list). The app is a Vue 3 single-page app built with Vite; all data stays in the browser with no server or database to install.
+A Kahoot-style vocabulary quiz for memorizing and revising a language (built around Korean ↔ English, but it works for any two-column word list). The drills are a Vue 3 single-page app built with Vite and keep all data in the browser. A small optional Node backend adds a protected Member page; the four drill screens work without it.
 
 
 ## Features
@@ -15,6 +15,7 @@ A Kahoot-style vocabulary quiz for memorizing and revising a language (built aro
 - **Targeted drills**: drill your 20 weakest words, 20 unseen words, or the words you just missed.
 - **Automatic saving**: results, decks and paste history are stored in the browser, with a JSON backup you can copy and restore.
 - **Light and dark mode**: toggle in the home header; follows the system setting until you choose, then remembers your choice. Works on desktop and mobile.
+- **Member page**: a separate page behind a real server-side login (Express + Postgres + bcrypt + signed cookie). The drill screens stay open and work offline.
 
 ## Quick start
 
@@ -27,10 +28,28 @@ npm run dev
 
 Open the URL Vite prints (usually `http://localhost:5173`) in a modern browser (Chrome, Edge,
 Firefox, Safari). To produce a static production bundle in `dist/`, run `npm run build`;
-`npm run preview` serves that bundle locally. To run the project's checks, use `npm run verify`.
+`npm run preview` rebuilds first, then serves that bundle locally so the Member page is never
+missing from a stale artifact. To run the project's checks, use `npm run verify`.
 
 1. Paste a word list (see below).
 2. Choose your round settings and press **Play**.
+
+### Member page (optional backend)
+
+The **Member** button in the home header opens a page that is only visible with a valid session. Local setup:
+
+1. Copy `.env.example` to `.env` and fill in `DATABASE_URL` (Postgres) and `VD_SESSION_SECRET`
+   (at least 32 characters in production). `.env` is gitignored.
+2. Run `npm run db:migrate` (creates the `users` table).
+3. Run `npm run hash-pw`, then put the printed hash in `VD_SEED_HASH` and your email in
+   `VD_SEED_EMAIL` in `.env`. Run `npm run seed-user`. Only you handle the password.
+4. In separate terminals run `npm run server` (API at `http://127.0.0.1:3001`) and `npm run dev`.
+   Vite proxies `/api` to the backend, so no CORS setup is needed locally.
+
+Sign in with that email and password. The session cookie is `HttpOnly`, `SameSite=Lax` and
+valid for 24 hours; `Secure` is added automatically in production. **Log out** clears it.
+When the backend is not running, the four drill screens still work, and the Member page shows
+a clear "service unavailable" message instead of a login form.
 
 ## Word list format
 
@@ -144,8 +163,9 @@ Notes:
 
 ## Dependencies
 
-Runtime: Vue 3. Build tooling: Vite + `@vitejs/plugin-vue` (see `package.json` / `package-lock.json`).
-Once built, the static bundle needs no server-side runtime and works offline. The home screen
+Runtime: Vue 3, plus Express, `pg` and `bcryptjs` for the optional member backend.
+Build tooling: Vite + `@vitejs/plugin-vue` (see `package.json` / `package-lock.json`).
+The built static bundle works offline for the drills; the Member page needs the backend. The home screen
 loads Google Fonts (Bricolage Grotesque, Noto Sans, Noto Sans KR); without a network connection,
 the system font fallbacks are used.
 
@@ -167,6 +187,19 @@ src/
     ReviewView.vue     # spaced-repetition flashcards
     AnalyticsView.vue  # weakness ranking and targeted drills
     ThemeToggle.vue    # theme button
+   api.js             # fetch wrapper (cookies + CSRF header, offline-safe)
+   LoginView.vue      # sign-in form for the protected page
+   MemberView.vue     # protected page: session status + logout
+server/
+   config.js          # fail-fast env validation and cookie/CORS settings
+   auth.js            # bcrypt verification and HMAC-SHA256 signed sessions
+   db.js              # pg.Pool
+   index.js           # Express: /api/health, /api/login, /api/logout, /api/me
+scripts/
+   hash-pw.mjs        # user-run password hashing
+   db-migrate.mjs     # creates the users table
+   seed-user.mjs      # creates/updates the login user
+tests/                 # node:test checks (auth, config, HTTP server, optional DB)
 Vocab Drill.html       # legacy single-file reference (kept for comparison; not the product)
 backup/                # pre-redesign copies
 ```
@@ -181,6 +214,10 @@ Shared state and pure helpers (weakness, shuffle, parsing, scheduling previews) 
 - Pasted words always go to the "Pasted words" deck.
 - No single-word editing or deleting. To remove words, restore an edited backup.
 - Data is not synced between devices. Use the JSON backup.
+- The Member session token is self-contained: logging out clears the browser cookie but does not
+  revoke a copied token before its 24-hour expiry. A password change should be followed by rotating
+  `VD_SESSION_SECRET`. There is no built-in rate limiting on `/api/login` — add it at the edge if
+  the backend is exposed publicly.
 
 ## Ideas for later
 

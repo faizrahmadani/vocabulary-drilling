@@ -8,11 +8,14 @@ The agent workflow contract lives in [`../AGENTS.md`](../AGENTS.md).
 
 A Kahoot-style + Anki-style vocabulary drill built as a **Vue 3 single-page app with Vite**.
 Screens are Vue single-file components; shared state and pure logic live in `src/store.js`.
-There is no server and no runtime dependency beyond Vue; the production output is a static
-bundle in `dist/`. Google Fonts are progressive enhancement with system fallbacks.
+The drills need no server and produce a static bundle in `dist/`. Google Fonts are progressive
+enhancement with system fallbacks.
 
-The only persistence is browser `localStorage` under the key `vocabdrill.v1`. Backups are
+The only drill persistence is browser `localStorage` under the key `vocabdrill.v1`. Backups are
 copy/paste JSON because the app writes no files to disk.
+
+A separate, optional **Express backend** adds one protected page (Member). It uses Postgres for
+the single user and `bcryptjs`, and serves only auth endpoints; it does not touch the drill data.
 
 ## 2. Architecture map
 
@@ -22,11 +25,13 @@ copy/paste JSON because the app writes no files to disk.
 | Entry / styles | `src/main.js`, `src/style.css` | Mounts the app; global CSS variables for light/dark, responsive layout, card/option styles. |
 | Core state | `src/store.js` — `db`, `save()`, `replaceDb()`, `normalize()`, `weak()` | Reactive store + defensive persistence; smoothed weakness score used for weighting and ranking. |
 | Theme | `src/useTheme.js`, `components/ThemeToggle.vue` | Reactive `theme` ref mirrored to `<html data-theme>`. |
-| Screen machine | `src/App.vue` | One view mounted at a time; navigation events (`home`, `play`, `review`, `stats`, `drill`). |
+| Screen machine | `src/App.vue` | One view mounted at a time; navigation events (`home`, `play`, `review`, `stats`, `drill`, `member`). |
 | Home | `components/HomeView.vue` — `/* ---------- Home ---------- */` | Deck list and settings, paste import (`parsePaste`, `addPasted`), paste history, JSON backup/restore. |
 | Quiz | `components/QuizView.vue` — `/* ---------- Quiz ---------- */` | `start`, `ask`, `pick`, `next`, `finish`. Weighted shuffle, 4 options, timer, score/streak, missed words. |
 | Flashcards | `components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | `review`, `drawCard`, `reveal`, `rate`, `finishReview`. Due queue, ease/interval scheduling, session summary. |
 | Analytics | `components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever graded Again or Hard", targeted drills. |
+| Member | `components/MemberView.vue`, `LoginView.vue`, `src/api.js` | Protected page: checks `/api/me`, shows sign-in form or status + logout. |
+| Auth server | `server/config.js`, `auth.js`, `db.js`, `index.js` | Fail-fast env config, bcrypt + dummy hash, HMAC-SHA256 signed sessions, `pg.Pool`, Express endpoints. |
 
 ### Data flow
 
@@ -42,6 +47,14 @@ Excel/Sheets paste → parsePaste → addPasted → db.decks[...].words → save
 Navigation between screens is local component state in `App.vue` (no router dependency).
 Because only one view is mounted at a time, quiz timers and review keyboard listeners are
 torn down in `onUnmounted` when the user navigates away.
+
+```text
+Member button → /api/me ── 200 → signed-in status + Logout
+                        └─ 401 → LoginView → POST /api/login → HttpOnly cookie → /api/me
+```
+
+Vite proxies `/api` to `http://127.0.0.1:3001` in dev, so the browser sees a single origin.
+Production can set `VD_FRONTEND_ORIGIN` for an explicit cross-origin CORS allowance.
 
 ## 3. Data model (`vocabdrill.v1`)
 
@@ -76,7 +89,11 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 ## 4. Operations
 
 - **Run:** `npm install` then `npm run dev` (Node.js 22+). Open the printed local URL.
-- **Build:** `npm run build` → static `dist/`; `npm run preview` serves it locally.
+- **Member backend:** copy `.env.example` → `.env`, set `DATABASE_URL` and `VD_SESSION_SECRET`,
+  then run `npm run db:migrate`. The user creates the credential with `npm run hash-pw`,
+  puts the hash in `VD_SEED_HASH` and an email in `VD_SEED_EMAIL`, and runs `npm run seed-user`.
+  Run `npm run server` alongside `npm run dev`.
+- **Build:** `npm run build` → static `dist/`; `npm run preview` rebuilds first, then serves it locally.
 - **Import:** copy two headerless columns from Excel/Sheets → **Paste from clipboard**.
   Separator precedence: tab, `;`, `|`, ` - `, `,`. Exact `a + b` duplicates are skipped.
   A deck needs ≥4 pairs for quiz rounds; flashcards work with fewer.
@@ -85,8 +102,8 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 - **Move devices:** data is per browser and per page address; use the JSON backup.
 - **Reset test state:** clear only `localStorage['vocabdrill.v1']` (and `vocabdrill.theme`
   for theme) in a throwaway browser profile. Never clear the user's real profile.
-- **Verify a change:** `npm run verify` (structural checks + `vite build`), then a manual browser
-  smoke test. See [TESTING.md](TESTING.md).
+- **Verify a change:** `npm run verify` (structural checks + `node:test` + `vite build`), then a
+  manual browser smoke test. See [TESTING.md](TESTING.md).
 
 ## 5. Known limitations / gotchas
 
@@ -102,3 +119,8 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
   malformed/wrong-typed shapes defensively.
 - `Vocab Drill.html` is kept only as the legacy reference the Vue app was ported from; it is
   not a build input or verification gate.
+- The Member token is self-contained: logout clears the cookie but cannot revoke a copied token
+  before `exp`. Rotating the password after a compromise must be paired with rotating
+  `VD_SESSION_SECRET`. No rate limiting is built into `/api/login`.
+- `tests/auth-db.test.js` needs a real `TEST_DATABASE_URL` supplied by the user; otherwise it is
+  skipped. Other auth tests use a fake pool only at the DB boundary with real bcrypt/HMAC/HTTP.
