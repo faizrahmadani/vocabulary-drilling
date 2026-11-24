@@ -2,9 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import bcrypt from 'bcryptjs'
 
-import { createPool } from '../server/db.js'
-import { verifyCredentials, newUserId } from '../server/auth.js'
-import { dummyHash } from '../server/auth.js'
+import db from '../data/db.js'
+import auth from '../data/auth.js'
+
+const { createPool } = db
+const { verifyCredentials, newUserId, dummyHash } = auth
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL || ''
 

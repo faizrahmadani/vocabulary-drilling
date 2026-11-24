@@ -5,11 +5,12 @@
  * This is NOT a unit-test framework and NOT a substitute for browser testing.
  * It fails fast with a descriptive message when the project scaffold, the Vue
  * single-file components, or the documented data contract are broken.
- * The real compile gate is `vite build`, run by `npm run verify` after this script.
+ * The compile gate is `vite build` and the behavioral gate is `npm test`, both
+ * run by `npm run verify` after this script.
  *
  * Usage (from the repository root):
  *   node scripts/verify.mjs
- *   npm run verify          # this script + vite build
+ *   npm run verify          # this script + vite build + npm test
  *
  * Exit codes: 0 = all checks passed, 1 = at least one check failed.
  */
@@ -79,9 +80,12 @@ if (pkg) {
     'hash-pw', 'db:migrate', 'seed-user']) {
     check(`package.json has the ${script} script`, typeof pkg.scripts?.[script] === 'string');
   }
-  for (const dep of ['vue', 'express', 'pg', 'bcryptjs']) {
+  for (const dep of ['vue', 'node-red', 'pg', 'bcryptjs']) {
     check(`package.json declares ${dep}`, Boolean(pkg.dependencies?.[dep]));
   }
+  check('node-red is pinned to the exact 5.0.10 release', pkg.dependencies?.['node-red'] === '5.0.10');
+  check('Express is not a dependency (Node-RED owns the HTTP layer)',
+    !pkg.dependencies?.express && !pkg.devDependencies?.express);
   check('uses ES modules ("type": "module")', pkg.type === 'module');
 }
 
@@ -101,14 +105,22 @@ for (const rel of [
   'src/api.js',
   'src/components/LoginView.vue',
   'src/components/MemberView.vue',
-  'server/config.js',
-  'server/auth.js',
-  'server/db.js',
-  'server/index.js',
+  'data/package.json',
+  'data/config.js',
+  'data/auth.js',
+  'data/db.js',
+  'data/auth-middleware.js',
+  'data/settings.js',
+  'data/flows.json',
   'scripts/hash-pw.mjs',
   'scripts/db-migrate.mjs',
   'scripts/seed-user.mjs',
+  'tests/auth.test.js',
+  'tests/config.test.js',
+  'tests/auth-middleware.test.js',
+  'tests/nodered.test.js',
   'tests/hash-pw.test.js',
+  'tests/auth-db.test.js',
   '.env.example',
 ]) read(rel);
 
@@ -170,10 +182,42 @@ check('App.vue has a member screen and keeps the four original screens',
 check('api wrapper sends cookies and the CSRF header',
   apiSource.includes("credentials: 'include'") && apiSource.includes('x-requested-with'));
 check('.env is gitignored so credentials stay local', /(^|\n)\.env(\r?\n|$)/.test(gitignore));
+check('Node-RED runtime artifacts in data/ are gitignored',
+  gitignore.includes('data/.config.*') && gitignore.includes('data/lib/')
+  && gitignore.includes('data/node_modules/') && gitignore.includes('data/flows_cred.json'));
 check('.env.example declares names but no values',
   !/^[ \t]*[A-Z_]+[ \t]*=[ \t]*\S+/m.test(read('.env.example') ?? ''));
-check('server/index.js starts the API when invoked directly',
-  /import\.meta\.url === pathToFileURL/.test(read('server/index.js') ?? ''));
+const dataPackage = read('data/package.json') ?? '';
+const settingsSource = read('data/settings.js') ?? '';
+const middlewareSource = read('data/auth-middleware.js') ?? '';
+const viteSource = read('vite.config.js') ?? '';
+let flows = null;
+try { flows = JSON.parse(read('data/flows.json') ?? ''); } catch (e) { check('data/flows.json is valid JSON', false, e.message); }
+
+check('data/ is CommonJS so Node-RED settings load correctly',
+  /"type"\s*:\s*"commonjs"/.test(dataPackage));
+check('flows.json is a committed array (no runtime-only flow state)', Array.isArray(flows));
+check('Node-RED runs the app on a single port with /api and /admin',
+  settingsSource.includes("httpNodeRoot: '/api'") && settingsSource.includes('httpAdminRoot: config.httpAdminRoot'));
+check('Node-RED serves the built Vue bundle via httpStatic',
+  /httpStatic:\s*fs\.existsSync/.test(settingsSource));
+check('the same auth function guards httpNodeAuth and httpNodeMiddleware',
+  (settingsSource.match(/handlers\.checkAuth/g) ?? []).length === 2);
+check('auth middleware answers login, logout and me before the router',
+  ["'/api/login'", "'/api/logout'", "'/api/me'"].every((p) => middlewareSource.includes(p)));
+check('health is answered by the middleware, not forwarded to an empty flow set',
+  /isHealthRequest\(path\)\)[\s\S]{0,240}sendJson\(res, 200, \{ ok: true \}\)/.test(middlewareSource));
+const configSource = read('data/config.js') ?? '';
+check('editor requires an admin hash and production credential secret has a length floor',
+  configSource.includes('VD_ADMIN_HASH wajib diisi') && configSource.includes('VD_CREDENTIAL_SECRET minimal 32'));
+check('CORS is emitted only for the configured origin',
+  middlewareSource.includes('origin !== config.frontendOrigin'));
+check('Vite proxies /api to the Node-RED port 1880',
+  viteSource.includes("http://127.0.0.1:1880"));
+for (const script of ['hash-pw', 'db:migrate', 'seed-user']) {
+  check(`${script} reads .env via --env-file-if-exists`,
+    (pkg?.scripts?.[script] || '').includes('--env-file-if-exists=.env'));
+}
 
 console.log(`\n${passed} passed, ${failures} failed.`);
 if (failures > 0) {

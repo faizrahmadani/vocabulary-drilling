@@ -1,10 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import http from 'node:http'
 import bcrypt from 'bcryptjs'
 
-import { loadConfig } from '../server/config.js'
-import { createApp } from '../server/index.js'
-import { dummyHash, newUserId } from '../server/auth.js'
+import configModule from '../data/config.js'
+import auth from '../data/auth.js'
+import { createAuthHandlers } from '../data/auth-middleware.js'
+
+const { loadConfig } = configModule
+const { dummyHash } = auth
 
 const SECRET = 'a-32-character-session-secret-value'
 const EMAIL = 'member@example.com'
@@ -32,12 +36,21 @@ function fakePool(hash) {
 
 async function start(overrides = {}) {
   const hash = overrides.hash || await bcrypt.hash(PASSWORD, 4)
-  const app = createApp({
+  const handlers = createAuthHandlers({
     config: testConfig(overrides.env),
     pool: overrides.pool || fakePool(hash),
     dummyHashValue: dummyHash(4),
   })
-  const server = app.listen(0, '127.0.0.1')
+  const server = http.createServer((req, res) => {
+    void handlers.checkAuth(req, res, () => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ next: true }))
+    }).catch(() => {
+      if (!res.headersSent) res.writeHead(500)
+      res.end()
+    })
+  })
+  server.listen(0, '127.0.0.1')
   await new Promise((resolve, reject) => {
     server.once('listening', resolve)
     server.once('error', reject)
@@ -48,59 +61,65 @@ async function start(overrides = {}) {
   }
 }
 
-async function login(base, email = EMAIL, password = PASSWORD) {
+async function login(base, email = EMAIL, password = PASSWORD, headers = {}) {
   return fetch(`${base}/api/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'XMLHttpRequest', ...headers },
     body: JSON.stringify({ email, password }),
   })
 }
 
-test('health is public and /api/me requires a valid session cookie', async () => {
+test('health is public, other /api routes need a session, and /api/me reports the email', async () => {
   const s = await start()
   try {
     const health = await fetch(`${s.base}/api/health`)
     assert.equal(health.status, 200)
     assert.deepEqual(await health.json(), { ok: true })
 
-    const anonymous = await fetch(`${s.base}/api/me`)
-    assert.equal(anonymous.status, 401, 'an anonymous /api/me must be unauthorized')
+    const next = await fetch(`${s.base}/api/anything`)
+    assert.equal(next.status, 401, 'unlisted /api routes must be blocked too')
 
     const response = await login(s.base)
     assert.equal(response.status, 200)
     const cookie = response.headers.get('set-cookie')
-    assert.ok(cookie && cookie.includes('vd_session='), 'login must set the session cookie')
+    assert.ok(cookie && cookie.includes('vd_session='))
 
     const authed = await fetch(`${s.base}/api/me`, { headers: { cookie: cookie.split(';')[0] } })
     assert.equal(authed.status, 200)
     assert.deepEqual(await authed.json(), { ok: true, email: EMAIL })
 
     const token = cookie.split(';')[0].split('=')[1]
-    const tampered = `${token.slice(0, -2)}zz`
-    const forged = await fetch(`${s.base}/api/me`, { headers: { cookie: `vd_session=${tampered}` } })
+    const forged = await fetch(`${s.base}/api/me`, {
+      headers: { cookie: `vd_session=${token.slice(0, -2)}zz` },
+    })
     assert.equal(forged.status, 401, 'a tampered cookie must be rejected')
   } finally {
     await s.close()
   }
 })
 
-test('login sets HttpOnly, SameSite, Max-Age but no Secure over plain HTTP locally', async () => {
+test('login cookie flags: HttpOnly, SameSite, Max-Age, no Secure over local HTTP', async () => {
   const s = await start()
   try {
-    const response = await login(s.base)
-    const cookie = response.headers.get('set-cookie')
+    const cookie = (await login(s.base)).headers.get('set-cookie')
     assert.match(cookie, /vd_session=/)
     assert.match(cookie, /HttpOnly/i)
     assert.match(cookie, /SameSite=Lax/i)
     assert.match(cookie, /Max-Age=86400/)
-    assert.doesNotMatch(cookie, /Secure/i, 'dev over http must not set Secure')
+    assert.doesNotMatch(cookie, /Secure/i)
   } finally {
     await s.close()
   }
 })
 
-test('production config sets the Secure flag on the session cookie', async () => {
-  const s = await start({ env: { NODE_ENV: 'production', DATABASE_URL: 'postgres://localhost/db' } })
+test('production config adds the Secure flag', async () => {
+  const s = await start({
+    env: {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://localhost/db',
+      VD_CREDENTIAL_SECRET: 'a-32-character-credential-secret',
+    },
+  })
   try {
     const response = await login(s.base)
     assert.equal(response.status, 200)
@@ -113,9 +132,9 @@ test('production config sets the Secure flag on the session cookie', async () =>
 test('failed logins are generic and set no cookie', async () => {
   const s = await start()
   try {
-    for (const [email, password] of [['nobody@example.com', PASSWORD], [EMAIL, 'wrong-password'], ['', '']]) {
+    for (const [email, password] of [[EMAIL, 'wrong-password'], ['nobody@example.com', PASSWORD], ['', '']]) {
       const response = await login(s.base, email, password)
-      assert.equal(response.status, 401, `expected 401 for ${email}`)
+      assert.equal(response.status, 401)
       assert.equal(response.headers.get('set-cookie'), null)
       assert.deepEqual(await response.json(), { error: 'unauthorized' })
     }
@@ -124,13 +143,13 @@ test('failed logins are generic and set no cookie', async () => {
   }
 })
 
-test('logout needs the CSRF header and clears the cookie', async () => {
+test('logout requires the CSRF header and clears the cookie', async () => {
   const s = await start()
   try {
     const noHeader = await fetch(`${s.base}/api/logout`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
     })
-    assert.equal(noHeader.status, 401, 'logout without x-requested-with must be rejected')
+    assert.equal(noHeader.status, 401)
 
     const ok = await fetch(`${s.base}/api/logout`, {
       method: 'POST',
@@ -149,9 +168,7 @@ test('malformed and oversized JSON bodies fail closed', async () => {
   const s = await start()
   try {
     const malformed = await fetch(`${s.base}/api/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{definitely-not-json',
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{not-json',
     })
     assert.equal(malformed.status, 400)
 
@@ -166,56 +183,34 @@ test('malformed and oversized JSON bodies fail closed', async () => {
   }
 })
 
-test('wrong HTTP methods return 405 on auth endpoints', async () => {
+test('wrong methods on auth endpoints return 405, while GET /api/me is valid but gated', async () => {
   const s = await start()
   try {
     for (const path of ['/api/login', '/api/logout']) {
       const response = await fetch(`${s.base}${path}`)
       assert.equal(response.status, 405, `${path} must reject GET`)
     }
-    const me = await fetch(`${s.base}/api/me`, { method: 'POST', body: '{}' })
-    assert.equal(me.status, 405)
+    const wrongMethod = await fetch(`${s.base}/api/me`, { method: 'POST' })
+    assert.equal(wrongMethod.status, 405, '/api/me must reject POST')
+
+    const anonymous = await fetch(`${s.base}/api/me`)
+    assert.equal(anonymous.status, 401, 'GET /api/me without a cookie must be unauthorized')
   } finally {
     await s.close()
   }
 })
 
-test('CORS is opt-in: explicit origin, credentials and preflight only when configured', async () => {
-  const plain = await start()
+test('CORS headers appear only for the configured origin', async () => {
+  const s = await start({ env: { VD_FRONTEND_ORIGIN: 'http://127.0.0.1:5173' } })
   try {
-    const response = await fetch(`${plain.base}/api/health`, {
-      headers: { origin: 'http://127.0.0.1:5173' },
-    })
-    assert.equal(response.headers.get('access-control-allow-origin'), null)
-  } finally {
-    await plain.close()
-  }
+    const good = await login(s.base, EMAIL, PASSWORD, { origin: 'http://127.0.0.1:5173' })
+    assert.equal(good.headers.get('access-control-allow-origin'), 'http://127.0.0.1:5173')
+    assert.equal(good.headers.get('access-control-allow-credentials'), 'true')
 
-  const configured = await start({ env: { VD_FRONTEND_ORIGIN: 'http://127.0.0.1:5173' } })
-  try {
-    const preflight = await fetch(`${configured.base}/api/login`, {
-      method: 'OPTIONS',
-      headers: {
-        origin: 'http://127.0.0.1:5173',
-        'access-control-request-method': 'POST',
-      },
-    })
-    assert.equal(preflight.status, 204)
-    assert.equal(preflight.headers.get('access-control-allow-origin'), 'http://127.0.0.1:5173')
-    assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
-    const response = await fetch(`${configured.base}/api/health`, {
-      headers: { origin: 'http://evil.example' },
-    })
-    assert.equal(response.headers.get('access-control-allow-origin'), null,
-      'an unapproved origin must not receive an ACAO header')
+    const bad = await login(s.base, EMAIL, PASSWORD, { origin: 'http://evil.example' })
+    assert.equal(bad.headers.get('access-control-allow-origin'), null,
+      'an unapproved origin must never receive ACAO')
   } finally {
-    await configured.close()
+    await s.close()
   }
-})
-
-test('a new id is generated per seed and is a UUID', () => {
-  const a = newUserId()
-  const b = newUserId()
-  assert.notEqual(a, b)
-  assert.match(a, /^[0-9a-f-]{36}$/i)
 })

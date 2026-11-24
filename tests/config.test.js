@@ -1,11 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import bcrypt from 'bcryptjs'
 
-import { loadConfig } from '../server/config.js'
+import configModule from '../data/config.js'
+
+const { loadConfig } = configModule
 
 const BASE = {
   DATABASE_URL: 'postgres://user:pass@127.0.0.1:5432/vocabdrill',
   VD_SESSION_SECRET: 'a-32-character-session-secret-value',
+  VD_CREDENTIAL_SECRET: 'a-32-character-credential-secret',
   NODE_ENV: 'development',
 }
 
@@ -19,7 +23,7 @@ function throwsWith(env, fragment) {
 
 test('development defaults are safe and usable without a configured secret', () => {
   const config = loadConfig({ NODE_ENV: 'development' })
-  assert.equal(config.port, 3001)
+  assert.equal(config.port, 1880)
   assert.equal(config.cookieName, 'vd_session')
   assert.equal(config.cookieSameSite, 'Lax')
   assert.equal(config.bcryptCost, 8)
@@ -38,6 +42,44 @@ test('production requires DATABASE_URL and a long enough session secret', () => 
   const prod = loadConfig({ ...BASE, NODE_ENV: 'production' })
   assert.equal(prod.isProduction, true)
   assert.equal(prod.secureCookie, true)
+  assert.equal(prod.editorEnabled, false)
+  assert.equal(prod.httpAdminRoot, false)
+})
+
+test('production requires a credential secret and forbids the editor', () => {
+  throwsWith({ ...BASE, NODE_ENV: 'production', VD_CREDENTIAL_SECRET: '' }, 'VD_CREDENTIAL_SECRET')
+  throwsWith({ ...BASE, NODE_ENV: 'production', VD_CREDENTIAL_SECRET: '   ' }, 'VD_CREDENTIAL_SECRET')
+  throwsWith({ ...BASE, NODE_ENV: 'production', ENABLE_EDITOR: 'true' }, 'ENABLE_EDITOR')
+})
+
+test('editor is opt-in at /admin locally and takes an admin hash when provided', () => {
+  const plain = loadConfig({ NODE_ENV: 'development' })
+  assert.equal(plain.editorEnabled, false)
+  assert.equal(plain.httpAdminRoot, false)
+
+  const hash = bcrypt.hashSync('runtime-test-admin-password', 4)
+  const editor = loadConfig({
+    NODE_ENV: 'development',
+    ENABLE_EDITOR: 'true',
+    VD_ADMIN_USER: 'local-admin',
+    VD_ADMIN_HASH: hash,
+  })
+  assert.equal(editor.editorEnabled, true)
+  assert.equal(editor.httpAdminRoot, '/admin')
+  assert.equal(editor.adminUser, 'local-admin')
+  assert.equal(editor.adminHash, hash)
+})
+
+test('the editor fails closed without a valid admin hash', () => {
+  throwsWith({ NODE_ENV: 'development', ENABLE_EDITOR: 'true' }, 'VD_ADMIN_HASH')
+  throwsWith({ NODE_ENV: 'development', ENABLE_EDITOR: 'true', VD_ADMIN_HASH: 'not-a-hash' }, 'bcrypt')
+  assert.equal(loadConfig({ NODE_ENV: 'development' }).adminHash, '')
+})
+
+test('production credential secret needs at least 32 characters', () => {
+  throwsWith({ ...BASE, NODE_ENV: 'production', VD_CREDENTIAL_SECRET: 'x' }, '32')
+  assert.equal(loadConfig({ ...BASE, NODE_ENV: 'production' }).credentialSecret,
+    BASE.VD_CREDENTIAL_SECRET)
 })
 
 test('Cookie SameSite, bcrypt cost and PORT are validated', () => {

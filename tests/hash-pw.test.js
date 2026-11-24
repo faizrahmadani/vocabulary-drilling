@@ -4,7 +4,9 @@ import { PassThrough } from 'node:stream'
 import bcrypt from 'bcryptjs'
 
 import { readPassword, hashPassword } from '../scripts/hash-pw.mjs'
-import { dummyHash } from '../server/auth.js'
+import auth from '../data/auth.js'
+
+const { dummyHash } = auth
 
 test('readPassword returns the typed line without echoing it to the output', async () => {
   const input = new PassThrough()

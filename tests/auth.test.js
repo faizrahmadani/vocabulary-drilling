@@ -12,7 +12,7 @@ import {
   verifySession,
   newSession,
   newUserId,
-} from '../server/auth.js'
+} from '../data/auth.js'
 
 const SECRET = 'test-secret-with-at-least-thirty-two-chars'
 
