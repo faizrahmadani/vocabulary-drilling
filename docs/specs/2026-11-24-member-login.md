@@ -4,7 +4,8 @@
 
 New user journey added on 2026-11-24. Surfaces: a **Member** button in the home header
 (`src/components/HomeView.vue`), `src/components/MemberView.vue`, `src/components/LoginView.vue`,
-and the Express endpoints in `server/index.js`. The four drill screens are unchanged.
+and the Node-RED `httpNodeAuth` handler in `data/auth-middleware.js` / `data/settings.js`.
+The four drill screens are unchanged.
 
 ## AS IS
 
@@ -30,15 +31,17 @@ Analytics) were open to anyone with the page, and all drill data lived in
 5. Credentials are created by the user, not by an agent: `npm run hash-pw` prints a bcrypt hash;
    the user puts it in `VD_SEED_HASH` along with `VD_SEED_EMAIL`, runs `npm run db:migrate` and
    `npm run seed-user`. There is no public registration endpoint.
-6. Locally the backend listens on `127.0.0.1:3001` and Vite proxies `/api` to it, so the browser
-   sees one origin. `VD_FRONTEND_ORIGIN` enables explicit cross-origin CORS if needed later.
+6. Locally Node-RED listens on `127.0.0.1:1880` and Vite proxies `/api` to it; the editor is
+   opt-in at `/admin`. In production Node-RED serves `dist/` at `/` and `/api` on the **same
+   port**, so a Vercel container needs only one origin. `VD_FRONTEND_ORIGIN` is only needed for a
+   separately hosted frontend. `data/flows.json` is committed and empty; flows stay stateless.
 
 ### AS IS → TO BE summary
 
 | Before | After |
 |---|---|
 | No auth surface at all | Member button + protected page with login/logout |
-| Static SPA only | Static drills + optional Express/Postgres auth backend |
+| Static SPA only | Static drills + optional Node-RED/Postgres auth backend on one port |
 | All screens public | Member screen gated; four drill screens stay public and offline |
 
 ## Invariants

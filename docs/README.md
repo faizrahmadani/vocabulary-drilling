@@ -14,8 +14,9 @@ enhancement with system fallbacks.
 The only drill persistence is browser `localStorage` under the key `vocabdrill.v1`. Backups are
 copy/paste JSON because the app writes no files to disk.
 
-A separate, optional **Express backend** adds one protected page (Member). It uses Postgres for
-the single user and `bcryptjs`, and serves only auth endpoints; it does not touch the drill data.
+A separate, optional **Node-RED 5.0.10 backend** adds one protected page (Member). It uses
+Postgres for the single user and `bcryptjs`, serves the built Vue bundle at `/` and the auth
+endpoints under `/api` on the **same port**, and does not touch the drill data.
 
 ## 2. Architecture map
 
@@ -31,7 +32,8 @@ the single user and `bcryptjs`, and serves only auth endpoints; it does not touc
 | Flashcards | `components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | `review`, `drawCard`, `reveal`, `rate`, `finishReview`. Due queue, ease/interval scheduling, session summary. |
 | Analytics | `components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever graded Again or Hard", targeted drills. |
 | Member | `components/MemberView.vue`, `LoginView.vue`, `src/api.js` | Protected page: checks `/api/me`, shows sign-in form or status + logout. |
-| Auth server | `server/config.js`, `auth.js`, `db.js`, `index.js` | Fail-fast env config, bcrypt + dummy hash, HMAC-SHA256 signed sessions, `pg.Pool`, Express endpoints. |
+| Auth server | `data/settings.js`, `auth-middleware.js`, `config.js`, `auth.js`, `db.js` | Node-RED settings; `httpNodeAuth` answers `/api/login`, `/api/logout`, `/api/me` and guards every other `/api` route; fail-fast env config, bcrypt + dummy hash, HMAC-SHA256 sessions, `pg.Pool`. |
+| Flows | `data/flows.json` | Committed flow source of truth, currently `[]`; must stay stateless for container scale-down. |
 
 ### Data flow
 
@@ -53,8 +55,9 @@ Member button → /api/me ── 200 → signed-in status + Logout
                         └─ 401 → LoginView → POST /api/login → HttpOnly cookie → /api/me
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:3001` in dev, so the browser sees a single origin.
-Production can set `VD_FRONTEND_ORIGIN` for an explicit cross-origin CORS allowance.
+Vite proxies `/api` to `http://127.0.0.1:1880` (Node-RED) in dev, so the browser sees a single
+origin. In production Node-RED's `httpStatic` serves `dist/` at `/`, keeping `/` and `/api` on
+one origin. `VD_FRONTEND_ORIGIN` is only needed when the frontend is hosted elsewhere.
 
 ## 3. Data model (`vocabdrill.v1`)
 
@@ -89,10 +92,12 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 ## 4. Operations
 
 - **Run:** `npm install` then `npm run dev` (Node.js 22+). Open the printed local URL.
-- **Member backend:** copy `.env.example` → `.env`, set `DATABASE_URL` and `VD_SESSION_SECRET`,
-  then run `npm run db:migrate`. The user creates the credential with `npm run hash-pw`,
-  puts the hash in `VD_SEED_HASH` and an email in `VD_SEED_EMAIL`, and runs `npm run seed-user`.
-  Run `npm run server` alongside `npm run dev`.
+- **Member backend:** copy `.env.example` → `.env`, set `DATABASE_URL`, `VD_SESSION_SECRET` and
+  `VD_CREDENTIAL_SECRET`. npm scripts load `.env` automatically via `--env-file-if-exists`.
+  Run `npm run db:migrate`. The user creates the credential with `npm run hash-pw`, puts the hash
+  in `VD_SEED_HASH` and an email in `VD_SEED_EMAIL`, then runs `npm run seed-user`.
+  Run `npm run server` (Node-RED on 1880; editor at `/admin` only when `ENABLE_EDITOR=true` with a
+  bcrypt `VD_ADMIN_HASH`) alongside `npm run dev`.
 - **Build:** `npm run build` → static `dist/`; `npm run preview` rebuilds first, then serves it locally.
 - **Import:** copy two headerless columns from Excel/Sheets → **Paste from clipboard**.
   Separator precedence: tab, `;`, `|`, ` - `, `,`. Exact `a + b` duplicates are skipped.

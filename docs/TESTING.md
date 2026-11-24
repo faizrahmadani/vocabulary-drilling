@@ -11,14 +11,15 @@ It supports `AGENTS.md` §3, §7, §10. **Nothing here is a fabricated metric.**
 | Compile / bundle | Vite production build | `vite build` (via `npm run verify`) | Real compile gate for all Vue SFCs |
 | Game logic (quiz, SRS, weakness, parsing) | `node:test` (built into Node 22) on helpers in `src/store.js` | — | **Gap** — see §4 |
 | Auth logic (bcrypt, HMAC session, env validation) | `node:test` — `tests/auth.test.js`, `tests/config.test.js` | `npm test` | Real bcrypt/HMAC; no DB needed |
-| Auth HTTP endpoints | `node:test` — `tests/server.test.js`, real Express server on port 0 via `fetch` | `npm test` | Fake pool only at the DB boundary |
+| Auth HTTP endpoints | `node:test` — `tests/auth-middleware.test.js`, real `http` server on port 0 via `fetch` | `npm test` | Fake pool only at the DB boundary |
+| Node-RED wiring | `node:test` — `tests/nodered.test.js`, spawns Node-RED with a temp userDir and real settings | `npm test` | Checks `/api/health`, `/api/me`, `httpStatic` `/`, `/admin`, production fail-fast |
 | Auth against Postgres | `node:test` — `tests/auth-db.test.js` | `npm test` | Skipped unless `TEST_DATABASE_URL` is supplied |
 | UI / state stores | Manual browser smoke test | see §3 | **Gap** — no component runner |
 | E2E | Manual, role-based locators / user-visible assertions | see §3 | **Gap** — no E2E framework |
 | Mutation testing | None available | — | **Gap** — never invent a score |
 
-`npm run verify` runs `scripts/verify.mjs`, then `npm test` (`node --test` on the four test
-files), then `vite build`. The structural script fails fast with descriptive messages when the
+`npm run verify` runs `scripts/verify.mjs`, then `vite build`, then `npm test` (`node --test` on
+the six test files). The build runs before the tests so `httpStatic` has a `dist/` to serve. The structural script fails fast with descriptive messages when the
 entry artifact, package manifest, Vue source tree, the documented storage key, the architecture
 markers or the auth boundary (cookie flags, CSRF header, gitignored `.env`) are broken, or when
 an SFC has unbalanced tags. The tests exercise auth logic and real HTTP behavior; the build
@@ -76,8 +77,9 @@ For any user-journey change (`AGENTS.md` §4):
   catches structural and compile regressions only.
 - **No temp-dir/fixture strategy needed.** The app writes no files. Isolate state with a fresh
   browser profile or by clearing only `localStorage['vocabdrill.v1']`.
-- **No browser E2E runner.** Member UI assertions are manual; `tests/server.test.js` covers the
-  HTTP contract with a real Express server, but not DOM interactions.
+- **No browser E2E runner.** Member UI assertions are manual; `tests/auth-middleware.test.js`
+  covers the HTTP contract and `tests/nodered.test.js` boots the real Node-RED runtime, but neither
+  exercises DOM interactions.
 - **Real DB test is conditional.** `tests/auth-db.test.js` is skipped without
   `TEST_DATABASE_URL`; the user supplies the connection string. Other tests stub only the DB
   boundary — bcrypt, HMAC and HTTP are real.
