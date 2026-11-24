@@ -8,17 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "npm run build && vite preview",
-    "server": "node ./node_modules/node-red/red.js --userDir data --settings data/settings.js",
-    "test": "node --test tests/auth.test.js tests/config.test.js tests/auth-middleware.test.js tests/nodered.test.js tests/hash-pw.test.js tests/auth-db.test.js",
-    "hash-pw": "node --env-file-if-exists=.env scripts/hash-pw.mjs",
-    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
-    "seed-user": "node --env-file-if-exists=.env scripts/seed-user.mjs",
+    "test": "node --test tests/api.test.js",
     "verify": "node scripts/verify.mjs && vite build && npm test"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "node-red": "5.0.10",
-    "pg": "^8.23.1",
     "vue": "^3.5.46"
   },
   "devDependencies": {
