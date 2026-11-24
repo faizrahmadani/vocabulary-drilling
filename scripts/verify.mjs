@@ -75,8 +75,12 @@ if (pkg) {
   check('declares Vue 3 as a runtime dependency', /^[\^~]?3\./.test(pkg.dependencies?.vue ?? ''));
   check('declares Vite as a dev dependency', Boolean(pkg.devDependencies?.vite));
   check('declares @vitejs/plugin-vue', Boolean(pkg.devDependencies?.['@vitejs/plugin-vue']));
-  for (const script of ['dev', 'build', 'preview', 'verify']) {
+  for (const script of ['dev', 'build', 'preview', 'verify', 'test', 'server',
+    'hash-pw', 'db:migrate', 'seed-user']) {
     check(`package.json has the ${script} script`, typeof pkg.scripts?.[script] === 'string');
+  }
+  for (const dep of ['vue', 'express', 'pg', 'bcryptjs']) {
+    check(`package.json declares ${dep}`, Boolean(pkg.dependencies?.[dep]));
   }
   check('uses ES modules ("type": "module")', pkg.type === 'module');
 }
@@ -94,6 +98,18 @@ for (const rel of [
   'src/components/ReviewView.vue',
   'src/components/AnalyticsView.vue',
   'src/components/ThemeToggle.vue',
+  'src/api.js',
+  'src/components/LoginView.vue',
+  'src/components/MemberView.vue',
+  'server/config.js',
+  'server/auth.js',
+  'server/db.js',
+  'server/index.js',
+  'scripts/hash-pw.mjs',
+  'scripts/db-migrate.mjs',
+  'scripts/seed-user.mjs',
+  'tests/hash-pw.test.js',
+  '.env.example',
 ]) read(rel);
 
 const main = read('src/main.js');
@@ -123,7 +139,8 @@ for (const section of ['Home', 'Quiz', 'Flashcards', 'Analytics']) {
 
 // --- Vue SFC structure ------------------------------------------------------
 const vueFiles = ['src/App.vue', 'src/components/HomeView.vue', 'src/components/QuizView.vue',
-  'src/components/ReviewView.vue', 'src/components/AnalyticsView.vue', 'src/components/ThemeToggle.vue'];
+  'src/components/ReviewView.vue', 'src/components/AnalyticsView.vue', 'src/components/ThemeToggle.vue',
+  'src/components/LoginView.vue', 'src/components/MemberView.vue'];
 for (const rel of vueFiles) {
   const sfc = read(rel);
   if (sfc === null) continue;
@@ -141,6 +158,22 @@ const placeholders = /<<[A-Za-z-]+>>|<(?:default-branch|git-host|docs-dir|spec-d
 const allText = [html, pkgRaw, ...vueFiles.map((f) => fs.readFileSync(path.join(root, f), 'utf8'))]
   .filter(Boolean).join('\n');
 check('does not contain an unresolved placeholder', !placeholders.test(allText));
+
+// --- Auth gate boundary ------------------------------------------------------
+const appSource = read('src/App.vue') ?? '';
+const apiSource = read('src/api.js') ?? '';
+const gitignore = read('.gitignore') ?? '';
+check('App.vue has a member screen and keeps the four original screens',
+  appSource.includes("'member'") && appSource.includes("'home'")
+  && appSource.includes("'quiz'") && appSource.includes("'review'")
+  && appSource.includes("'analytics'"));
+check('api wrapper sends cookies and the CSRF header',
+  apiSource.includes("credentials: 'include'") && apiSource.includes('x-requested-with'));
+check('.env is gitignored so credentials stay local', /(^|\n)\.env(\r?\n|$)/.test(gitignore));
+check('.env.example declares names but no values',
+  !/^[ \t]*[A-Z_]+[ \t]*=[ \t]*\S+/m.test(read('.env.example') ?? ''));
+check('server/index.js starts the API when invoked directly',
+  /import\.meta\.url === pathToFileURL/.test(read('server/index.js') ?? ''));
 
 console.log(`\n${passed} passed, ${failures} failed.`);
 if (failures > 0) {
