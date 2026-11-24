@@ -14,9 +14,10 @@ enhancement with system fallbacks.
 The only drill persistence is browser `localStorage` under the key `vocabdrill.v1`. Backups are
 copy/paste JSON because the app writes no files to disk.
 
-A separate, optional **Node-RED 5.0.10 backend** adds one protected page (Member). It uses
-Postgres for the single user and `bcryptjs`, serves the built Vue bundle at `/` and the auth
-endpoints under `/api` on the **same port**, and does not touch the drill data.
+A separate repository, **NodeRed-On-Vercel**, provides the login API for one protected page
+(Member). It uses Postgres, `bcryptjs` and signed cookies. This repository is a **frontend-only**
+Vue SPA: it has no backend code, no database configuration and no secrets, and never touches the
+drill data from the server side.
 
 ## 2. Architecture map
 
@@ -32,8 +33,8 @@ endpoints under `/api` on the **same port**, and does not touch the drill data.
 | Flashcards | `components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | `review`, `drawCard`, `reveal`, `rate`, `finishReview`. Due queue, ease/interval scheduling, session summary. |
 | Analytics | `components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever graded Again or Hard", targeted drills. |
 | Member | `components/MemberView.vue`, `LoginView.vue`, `src/api.js` | Protected page: checks `/api/me`, shows sign-in form or status + logout. |
-| Auth server | `data/settings.js`, `auth-middleware.js`, `config.js`, `auth.js`, `db.js` | Node-RED settings; `httpNodeAuth` answers `/api/login`, `/api/logout`, `/api/me` and guards every other `/api` route; fail-fast env config, bcrypt + dummy hash, HMAC-SHA256 sessions, `pg.Pool`. |
-| Flows | `data/flows.json` | Committed flow source of truth, currently `[]`; must stay stateless for container scale-down. |
+| Auth boundary | `src/api.js` | Calls `/api/login`, `/api/logout`, `/api/me` with `credentials:'include'` and `x-requested-with`; maps network failure to an offline-safe result. |
+| Backend (other repo) | `NodeRed-On-Vercel` → `data/settings.js` | `httpNodeAuth` answers login/logout/me and guards the rest of `/api`; Postgres + bcrypt + HMAC sessions. Not part of this repository. |
 
 ### Data flow
 
@@ -55,9 +56,12 @@ Member button → /api/me ── 200 → signed-in status + Logout
                         └─ 401 → LoginView → POST /api/login → HttpOnly cookie → /api/me
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:1880` (Node-RED) in dev, so the browser sees a single
-origin. In production Node-RED's `httpStatic` serves `dist/` at `/`, keeping `/` and `/api` on
-one origin. `VD_FRONTEND_ORIGIN` is only needed when the frontend is hosted elsewhere.
+Vite proxies `/api` to `http://127.0.0.1:1880` (the Node-RED backend repo) in dev and preview, so
+the browser sees a single origin and no CORS is needed locally. In production the deployments are
+on different origins: build with the public `VITE_API_BASE` pointing at the backend origin so
+`src/api.js` calls absolute URLs, and configure `NODE_RED_FRONTEND_ORIGIN` plus
+`NODE_RED_COOKIE_SAMESITE=None` (HTTPS/Secure) on the backend. `VITE_API_BASE` is a public URL;
+no secret is ever needed in the frontend.
 
 ## 3. Data model (`vocabdrill.v1`)
 
@@ -92,12 +96,10 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
 ## 4. Operations
 
 - **Run:** `npm install` then `npm run dev` (Node.js 22+). Open the printed local URL.
-- **Member backend:** copy `.env.example` → `.env`, set `DATABASE_URL`, `VD_SESSION_SECRET` and
-  `VD_CREDENTIAL_SECRET`. npm scripts load `.env` automatically via `--env-file-if-exists`.
-  Run `npm run db:migrate`. The user creates the credential with `npm run hash-pw`, puts the hash
-  in `VD_SEED_HASH` and an email in `VD_SEED_EMAIL`, then runs `npm run seed-user`.
-  Run `npm run server` (Node-RED on 1880; editor at `/admin` only when `ENABLE_EDITOR=true` with a
-  bcrypt `VD_ADMIN_HASH`) alongside `npm run dev`.
+- **Member backend:** set up Postgres, `.env`, `npm run db:migrate`, `npm run hash-pw` and
+  `npm run seed-user` in the **NodeRed-On-Vercel** repository (see its README). Then run that
+  backend (`npm run dev`, port 1880) alongside this repo's `npm run dev`. This repository has no
+  `.env` and no backend scripts.
 - **Build:** `npm run build` → static `dist/`; `npm run preview` rebuilds first, then serves it locally.
 - **Import:** copy two headerless columns from Excel/Sheets → **Paste from clipboard**.
   Separator precedence: tab, `;`, `|`, ` - `, `,`. Exact `a + b` duplicates are skipped.
@@ -124,8 +126,8 @@ Unanswered words are treated as `0.6`. Weight for the optional weak-word focus i
   malformed/wrong-typed shapes defensively.
 - `Vocab Drill.html` is kept only as the legacy reference the Vue app was ported from; it is
   not a build input or verification gate.
-- The Member token is self-contained: logout clears the cookie but cannot revoke a copied token
-  before `exp`. Rotating the password after a compromise must be paired with rotating
-  `VD_SESSION_SECRET`. No rate limiting is built into `/api/login`.
-- `tests/auth-db.test.js` needs a real `TEST_DATABASE_URL` supplied by the user; otherwise it is
-  skipped. Other auth tests use a fake pool only at the DB boundary with real bcrypt/HMAC/HTTP.
+- The Member session comes from the separate backend. Its token is self-contained: logout clears
+  the cookie but cannot revoke a copied token before `exp`. Password rotation there must be paired
+  with rotating `NODE_RED_SESSION_SECRET`. No rate limiting is built into `/api/login`.
+- The backend's `tests/auth-db.test.js` needs a real `TEST_DATABASE_URL` supplied by the user;
+  otherwise it is skipped. This repository only tests the frontend API wrapper.

@@ -1,7 +1,7 @@
 # Vocab Drill
 This repository contains AI generated code. Please do keep in mind that this project serves solely as a platform for language vocabulary drilling.
 
-A Kahoot-style vocabulary quiz for memorizing and revising a language (built around Korean ↔ English, but it works for any two-column word list). The drills are a Vue 3 single-page app built with Vite and keep all data in the browser. An optional Node-RED backend adds a protected Member page; the four drill screens work without it.
+A Kahoot-style vocabulary quiz for memorizing and revising a language (built around Korean ↔ English, but it works for any two-column word list). The drills are a Vue 3 single-page app built with Vite and keep all data in the browser. A separate backend repository (**NodeRed-On-Vercel**) provides login for one protected Member page; the four drill screens work without it.
 
 
 ## Features
@@ -15,7 +15,7 @@ A Kahoot-style vocabulary quiz for memorizing and revising a language (built aro
 - **Targeted drills**: drill your 20 weakest words, 20 unseen words, or the words you just missed.
 - **Automatic saving**: results, decks and paste history are stored in the browser, with a JSON backup you can copy and restore.
 - **Light and dark mode**: toggle in the home header; follows the system setting until you choose, then remembers your choice. Works on desktop and mobile.
-- **Member page**: a separate page behind a server-side login handled by Node-RED (Postgres + bcrypt + signed cookie). One port serves both the Vue bundle and `/api`. The drill screens stay open and work offline.
+- **Member page**: a separate page behind a server-side login provided by the separate `NodeRed-On-Vercel` backend (Postgres + bcrypt + signed cookie). The drill screens stay open and work offline.
 
 ## Quick start
 
@@ -34,30 +34,35 @@ missing from a stale artifact. To run the project's checks, use `npm run verify`
 1. Paste a word list (see below).
 2. Choose your round settings and press **Play**.
 
-### Member page (optional backend)
+### Member page (backend in a separate repository)
 
-The **Member** button in the home header opens a page that is only visible with a valid session. Local setup:
+The **Member** button in the home header opens a page that is only visible with a valid session.
+This repository contains **no backend code, no database configuration and no secrets**. Everything
+below happens in the separate `NodeRed-On-Vercel` repository — see its README for setup of
+Postgres, `.env`, `npm run db:migrate`, `npm run hash-pw` and `npm run seed-user`.
 
-1. Copy `.env.example` to `.env` and fill in `DATABASE_URL` (Postgres), `VD_SESSION_SECRET`
-   (at least 32 characters in production) and `VD_CREDENTIAL_SECRET` (required in production).
-   `.env` is gitignored. The npm scripts load it automatically with
-   `--env-file-if-exists=.env`, so you do not need to export variables in the shell.
-2. Run `npm run db:migrate` (creates the `users` table).
-3. Run `npm run hash-pw` (the password is not echoed), then put the printed hash in `VD_SEED_HASH`
-   and your email in `VD_SEED_EMAIL` in `.env`. Run `npm run seed-user`. Only you handle the password.
-4. In separate terminals run `npm run server` (Node-RED at `http://127.0.0.1:1880`) and
-   `npm run dev` (Vite at `http://127.0.0.1:5173`). Vite proxies `/api` to Node-RED, so no CORS
-   setup is needed locally. Set `ENABLE_EDITOR=true` in `.env` to reach the Node-RED editor at
-   `http://127.0.0.1:1880/admin` — but `ENABLE_EDITOR=true` **requires** a bcrypt `VD_ADMIN_HASH`
-   (make one with `npm run hash-pw`); leave it unset in production.
+Run the backend there, then run this frontend:
 
-Node-RED serves both the built Vue bundle at `/` (via `httpStatic`) and `/api` on the **same
-port**, so a Vercel deployment needs only one container. `data/flows.json` is committed and
-currently empty: auth is answered by `httpNodeAuth` in `data/settings.js`, before the flows
-router. Sign in with your seeded email and password. The session cookie is `HttpOnly`,
-`SameSite=Lax` and valid for 24 hours; `Secure` is added automatically in production. **Log out**
-clears it. When the backend is not running, the four drill screens still work, and the Member
-page shows a clear "service unavailable" message instead of a login form.
+```powershell
+# terminal 1 — in the NodeRed-On-Vercel repository
+npm run dev          # Node-RED API at http://127.0.0.1:1880
+
+# terminal 2 — in this repository
+npm run dev          # Vite at http://127.0.0.1:5173
+```
+
+Vite proxies `/api` to `http://127.0.0.1:1880`, so the browser sees one origin locally: no CORS,
+no `SameSite=None` needed for development. The frontend calls only `/api/login`, `/api/logout` and
+`/api/me`; `src/api.js` sends cookies with `credentials: 'include'` and the `x-requested-with`
+header required by the backend's CSRF gate.
+
+In production the two deployments are on different origins. Build this frontend with
+`VITE_API_BASE=https://<backend-host>` (a public URL, not a secret); `src/api.js` prefixes every
+`/api/*` call with it. The backend must set `NODE_RED_FRONTEND_ORIGIN` to this frontend's exact
+origin and `NODE_RED_COOKIE_SAMESITE=None` (with HTTPS/`Secure`). Sign in with the user created in
+the backend repository. **Log out** clears
+the cookie. When the backend is unreachable, the four drill screens still work and the Member page
+shows a clear "service unavailable" message instead of a login form.
 
 ## Word list format
 
@@ -171,8 +176,9 @@ Notes:
 
 ## Dependencies
 
-Runtime: Vue 3, plus **Node-RED 5.0.10** (pinned), `pg` and `bcryptjs` for the optional member backend.
-Build tooling: Vite + `@vitejs/plugin-vue` (see `package.json` / `package-lock.json`).
+Runtime: Vue 3 only. Build tooling: Vite + `@vitejs/plugin-vue` (see `package.json` / `package-lock.json`).
+The login API is deployed separately from the `NodeRed-On-Vercel` repository; no backend dependency
+is installed here.
 The built static bundle works offline for the drills; the Member page needs the backend. The home screen
 loads Google Fonts (Bricolage Grotesque, Noto Sans, Noto Sans KR); without a network connection,
 the system font fallbacks are used.
@@ -188,7 +194,7 @@ src/
   style.css            # global styles (light/dark, responsive, cards, quiz, flashcards)
   store.js             # reactive db, localStorage, and pure logic helpers
   useTheme.js          # reactive light/dark theme state
-  App.vue              # screen state machine: home / quiz / review / analytics
+  App.vue              # screen state machine: home / quiz / review / analytics / member
   components/
     HomeView.vue       # decks, paste import, settings, history, backup
     QuizView.vue       # round logic, options, timer, scoring
@@ -198,19 +204,7 @@ src/
    api.js             # fetch wrapper (cookies + CSRF header, offline-safe)
    LoginView.vue      # sign-in form for the protected page
    MemberView.vue     # protected page: session status + logout
-data/                  # CommonJS userDir for Node-RED
-   package.json       # {"type":"commonjs"} so settings.js loads as CommonJS
-   settings.js        # uiPort, httpNodeRoot '/api', /admin editor, httpStatic dist
-   auth-middleware.js # httpNodeAuth: /api/login, /api/logout, /api/me + /api guard
-   config.js          # fail-fast env validation and cookie/CORS settings
-   auth.js            # bcrypt verification and HMAC-SHA256 signed sessions
-   db.js              # pg.Pool
-   flows.json         # committed flow source of truth (currently [])
-scripts/
-   hash-pw.mjs        # user-run password hashing
-   db-migrate.mjs     # creates the users table
-   seed-user.mjs      # creates/updates the login user
-tests/                 # node:test checks (auth, config, HTTP server, optional DB)
+tests/                 # node:test checks for src/api.js
 Vocab Drill.html       # legacy single-file reference (kept for comparison; not the product)
 backup/                # pre-redesign copies
 ```
@@ -225,11 +219,11 @@ Shared state and pure helpers (weakness, shuffle, parsing, scheduling previews) 
 - Pasted words always go to the "Pasted words" deck.
 - No single-word editing or deleting. To remove words, restore an edited backup.
 - Data is not synced between devices. Use the JSON backup.
-- The Member session token is self-contained: logging out clears the browser cookie but does not
-  revoke a copied token before its 24-hour expiry. A password change should be followed by rotating
-  `VD_SESSION_SECRET`. There is no built-in rate limiting on `/api/login` — add it at the edge if
-  the backend is exposed publicly. A Vercel container may scale down when idle, so `flows.json`
-  must stay stateless (it is currently empty).
+- The Member session is issued by the separate backend and is self-contained: logging out clears
+  the browser cookie but does not revoke a copied token before its 24-hour expiry. Password changes
+  there must be paired with rotating `NODE_RED_SESSION_SECRET`. No rate limiting is built into the
+  backend's `/api/login` — add it at the edge if exposed publicly. Cross-origin production requires
+  HTTPS on both deployments, `NODE_RED_FRONTEND_ORIGIN`, and `NODE_RED_COOKIE_SAMESITE=None`.
 
 ## Ideas for later
 

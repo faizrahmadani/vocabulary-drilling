@@ -10,20 +10,18 @@ It supports `AGENTS.md` §3, §7, §10. **Nothing here is a fabricated metric.**
 | Structure / scaffold | `scripts/verify.mjs` (zero dependencies, Node 22+) | `node scripts/verify.mjs` | Reference check — **partial gap** |
 | Compile / bundle | Vite production build | `vite build` (via `npm run verify`) | Real compile gate for all Vue SFCs |
 | Game logic (quiz, SRS, weakness, parsing) | `node:test` (built into Node 22) on helpers in `src/store.js` | — | **Gap** — see §4 |
-| Auth logic (bcrypt, HMAC session, env validation) | `node:test` — `tests/auth.test.js`, `tests/config.test.js` | `npm test` | Real bcrypt/HMAC; no DB needed |
-| Auth HTTP endpoints | `node:test` — `tests/auth-middleware.test.js`, real `http` server on port 0 via `fetch` | `npm test` | Fake pool only at the DB boundary |
-| Node-RED wiring | `node:test` — `tests/nodered.test.js`, spawns Node-RED with a temp userDir and real settings | `npm test` | Checks `/api/health`, `/api/me`, `httpStatic` `/`, `/admin`, production fail-fast |
-| Auth against Postgres | `node:test` — `tests/auth-db.test.js` | `npm test` | Skipped unless `TEST_DATABASE_URL` is supplied |
+| Frontend API wrapper | `node:test` — `tests/api.test.js`, stubbed `fetch` | `npm test` | Asserts cookies, CSRF header, JSON body, offline fallback |
 | UI / state stores | Manual browser smoke test | see §3 | **Gap** — no component runner |
 | E2E | Manual, role-based locators / user-visible assertions | see §3 | **Gap** — no E2E framework |
 | Mutation testing | None available | — | **Gap** — never invent a score |
 
 `npm run verify` runs `scripts/verify.mjs`, then `vite build`, then `npm test` (`node --test` on
-the six test files). The build runs before the tests so `httpStatic` has a `dist/` to serve. The structural script fails fast with descriptive messages when the
-entry artifact, package manifest, Vue source tree, the documented storage key, the architecture
-markers or the auth boundary (cookie flags, CSRF header, gitignored `.env`) are broken, or when
-an SFC has unbalanced tags. The tests exercise auth logic and real HTTP behavior; the build
-compiles every component template and script. Game logic itself still has no automated runner.
+`tests/api.test.js`). The structural script fails fast with descriptive messages when the entry
+artifact, package manifest, Vue source tree, documented storage key, architecture markers, the
+`/api` proxy, or the "no backend dependency / no secret in frontend source" boundary is broken, or
+when an SFC has unbalanced tags. The test exercises the API wrapper; the build compiles every
+component template and script. Game logic itself still has no automated runner. Backend tests live
+in the separate `NodeRed-On-Vercel` repository.
 
 Run the check **once, after the red-team subagent reports**, not before and not in a loop
 (`AGENTS.md` §1, §5, §6). The whole project is one cheap gate.
@@ -59,17 +57,18 @@ For any user-journey change (`AGENTS.md` §4):
 4. Walk the affected journey end-to-end using the cases in §2.
 5. Open DevTools console — there must be no new uncaught errors.
 6. Test offline once (devtools offline / no network) to confirm font fallback.
-7. For the Member journey, run `npm run server` in a second terminal alongside `npm run dev`,
-   sign in and out, refresh mid-session, then stop the backend and confirm the drills still work
-   and the Member page degrades to the "service unavailable" card.
+7. For the Member journey, run `npm run dev` **in the NodeRed-On-Vercel repository** in a second
+   terminal alongside this repo's `npm run dev`. Sign in and out, refresh mid-session, then stop
+   the backend and confirm the drills still work and the Member page degrades to the
+   "service unavailable" card.
 8. Record exactly what was checked in the gate report.
 
 ## 4. Documented gaps — how we compensate
 
 - **No unit framework for game logic.** Game logic is plain functions in `src/store.js`;
   today we compensate with explicit edge-case manual cases above and the structural + build
-  checks. Auth and config use the built-in `node:test` runner, so no new test dependency was
-  added.
+  checks. The API wrapper uses the built-in `node:test` runner, so no new test dependency was
+  added. The HTTP/auth contract itself is tested in the backend repository.
 - **No mutation testing.** No suitable tool is configured. Compensate with higher branch
   coverage on the four sections. Never report a mutation score.
 - **No E2E framework.** Compensate with the role-based manual smoke procedure.
@@ -77,14 +76,13 @@ For any user-journey change (`AGENTS.md` §4):
   catches structural and compile regressions only.
 - **No temp-dir/fixture strategy needed.** The app writes no files. Isolate state with a fresh
   browser profile or by clearing only `localStorage['vocabdrill.v1']`.
-- **No browser E2E runner.** Member UI assertions are manual; `tests/auth-middleware.test.js`
-  covers the HTTP contract and `tests/nodered.test.js` boots the real Node-RED runtime, but neither
-  exercises DOM interactions.
-- **Real DB test is conditional.** `tests/auth-db.test.js` is skipped without
-  `TEST_DATABASE_URL`; the user supplies the connection string. Other tests stub only the DB
-  boundary — bcrypt, HMAC and HTTP are real.
-- `node_modules/`, `dist/` and `.env` are generated/secret and gitignored; `package-lock.json`
-  and `.env.example` are committed.
+- **No browser E2E runner.** Member UI assertions are manual; `tests/api.test.js` covers only the
+  fetch wrapper, not DOM interactions. The real HTTP/auth contract is tested in the separate
+  `NodeRed-On-Vercel` repository.
+- **Backend DB test is conditional there.** Its `tests/auth-db.test.js` is skipped without a
+  user-supplied `TEST_DATABASE_URL`; no connection string is invented here.
+- This repo has no `.env` and no `.env.example`. `node_modules/` and `dist/` are generated and
+  gitignored; `package-lock.json` is committed.
 
 A documented gap is better than a hidden one. If a check is flaky or skipped on a platform,
 name it and the reason here — never delete it to get a green run.

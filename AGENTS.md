@@ -15,7 +15,7 @@
 | `<default-branch>` | `main` (protected by convention) |
 | `<git-host>` | GitHub — `https://github.com/faizrahmadani/vocabulary-drilling.git` |
 | Product artifact | Vue 3 + Vite SPA: `index.html` + `src/` → static bundle in `dist/` |
-| `<module-test-cmd>` / `<ui-test-cmd>` / `<e2e-cmd>` | `npm run verify` = `node scripts/verify.mjs` (structural smoke) + `vite build` (compile gate) + `npm test` (`node:test`: auth/config/middleware/Node-RED/optional DB). No DOM/E2E runner — **documented partial gap**, see §10. |
+| `<module-test-cmd>` / `<ui-test-cmd>` / `<e2e-cmd>` | `npm run verify` = `node scripts/verify.mjs` (structural smoke) + `vite build` (compile gate) + `npm test` (`node:test`: `tests/api.test.js`). No DOM/E2E runner — **documented partial gap**, see §10. |
 | `<mutation-tool>` | **Not available** — no mutation tool configured for the project. Documented gap, see §10. |
 | `<docs-dir>` | `docs/` (architecture + operations) |
 | `<spec-dir>` | `docs/specs/` (user-journey specs) |
@@ -23,9 +23,9 @@
 | `<lint-cmd>` / `<format-cmd>` | `npm run verify` for structural/compile checks; manual style check against §3 conventions. No ESLint/Prettier config by design. |
 | `<temp-dir-helper>` | **N/A** — no file-writing code. Browser state lives in `localStorage` (`vocabdrill.v1`). |
 | Browser storage key | `vocabdrill.v1` (all decks, stats, schedules, sessions, pastes, config) |
-| Member backend | Optional **Node-RED 5.0.10** in `data/`: Postgres `users`, `bcryptjs`, HMAC-SHA256 signed cookie `vd_session`. Auth answered by `httpNodeAuth` on one port; `httpStatic` serves `dist/` at `/`. Local proxy: Vite `/api` → `127.0.0.1:1880`. `ENABLE_EDITOR=true` requires a bcrypt `VD_ADMIN_HASH` and is forbidden in production. |
-| Runtime dependencies | `vue`, `node-red@5.0.10` (exact pin), `pg`, `bcryptjs` (explicitly approved). No Express dependency. Drill screens still work without the backend. |
-| Secrets | `.env` (gitignored) + host env. `.env.example` holds names only. User creates credentials via `npm run hash-pw` / `db:migrate` / `seed-user`; agents never ask for or store passwords. |
+| Member backend | **Separate repository** `NodeRed-On-Vercel`: Node-RED + Postgres + bcrypt + HMAC cookie `nr_session`. It answers `/api/login`, `/api/logout`, `/api/me`. This repo is frontend-only: local Vite proxy `/api` → `127.0.0.1:1880`; production uses explicit CORS on the backend. |
+| Runtime dependencies | `vue` only. `node-red`, `pg`, `bcryptjs`, `express` are all absent by design. Drill screens still work without the backend. |
+| Secrets | **None in this repository.** No `.env`, no `.env.example`, no DB URL, no API key, no session secret. The only build-time variable is public `VITE_API_BASE`; credentials are created by the user in the backend repository; agents never ask for or store passwords. |
 
 Commands assume PowerShell on Windows and run from the repository root. Requires Node.js 22+
 and npm. `Vocab Drill.html` is kept only as the legacy single-file reference the Vue app was
@@ -142,8 +142,8 @@ The product is a Vue 3 + Vite SPA with these regions:
 | **Flashcards** | `src/components/ReviewView.vue` — `/* ---------- Flashcards ---------- */` | Due queue, draw/reveal, `rate()`, ease/interval scheduling, session summary. |
 | **Analytics** | `src/components/AnalyticsView.vue` — `/* ---------- Analytics ---------- */` | Weakness ranking, "ever Again or Hard", targeted drills. |
 | **Member** | `src/components/MemberView.vue`, `LoginView.vue`, `src/api.js` — `/* ---------- Member (protected page) ---------- */`, `/* ---------- Login ---------- */` | Protected page: `GET /api/me`, sign-in form, logout. Only this screen requires a session. |
-| **Auth server** | `data/settings.js`, `auth-middleware.js`, `config.js`, `auth.js`, `db.js` | Node-RED settings on one port: `httpNodeRoot '/api'`, editor `/admin` locally, `httpStatic dist`. `httpNodeAuth` answers `/api/health`, `/api/login`, `/api/logout`, `/api/me` and guards all other `/api` routes. |
-| **Flows** | `data/flows.json` | Committed flow source of truth, currently `[]`; must stay stateless because Vercel containers can scale down when idle. |
+| **Auth boundary** | `src/api.js` | `credentials:'include'`, `x-requested-with`, JSON body, offline-safe result. Calls `/api/login`, `/api/logout`, `/api/me` on the separate backend. |
+| **Backend (other repo)** | `NodeRed-On-Vercel` → `data/settings.js` | `httpNodeAuth` answers login/logout/me and guards the rest of `/api`; Postgres + bcrypt + HMAC sessions. Never edited from this repository. |
 
 Data model and operations are documented in `docs/README.md`. User-journey specs live in
 `docs/specs/`; update the matching spec in the same PR when a journey changes.
@@ -251,9 +251,9 @@ read-only explorer — to actively try to break the feature:
 - Never invent a coverage or mutation number; document gaps instead.
 - Never bundle unrelated features, cleanup, docs, and tests into one commit.
 - Never add runtime dependencies/build tooling or network requirements without explicit user
-  approval. Approved: Vue/Vite toolchain for the rewrite; `node-red@5.0.10` (exact), `pg` and
-  `bcryptjs` for the member backend. Express is intentionally NOT a dependency. The built static
-  app still works offline with system font fallbacks.
+  approval. Approved here: Vue/Vite toolchain only. The auth backend is a separate repository and
+  is NOT a dependency of this project. The built static app still works offline with system font
+  fallbacks.
 
 ---
 
@@ -271,10 +271,10 @@ here rather than faked:
 | `.env.example` / secrets | **N/A.** No server, no secrets. | All state is local in `localStorage`. |
 | Temp dirs / fixtures | **N/A.** App writes no files. | Reset state via a fresh `db` or cleared `localStorage['vocabdrill.v1']`. |
 | CI / auto-merge / API token | **Not configured.** | Agent reports the compare URL and stops; the human creates and merges the PR. |
-| DOM/E2E runner for Member UI | **Not available.** | `tests/auth-middleware.test.js` checks the HTTP contract and `tests/nodered.test.js` boots the real Node-RED runtime; the Member screen is covered by manual browser smoke in `docs/TESTING.md`. |
-| Node-RED dependency advisories | **Known.** `npm install` reports moderate advisories from Node-RED's transitive packages. | Pin `node-red@5.0.10`; do not run `npm audit fix --force` (breaking changes). Track upstream releases. |
-| `TEST_DATABASE_URL` | **User-supplied only.** | `tests/auth-db.test.js` is skipped without it; agents never invent a connection string. |
-| Session revocation / rate limiting | **By design / edge concern.** | Logout clears the cookie but cannot revoke a copied token before `exp`; rotate `VD_SESSION_SECRET` after a compromise. Add rate limiting at the edge for a public deployment. |
+| DOM/E2E runner for Member UI | **Not available.** | `tests/api.test.js` checks the fetch wrapper; the HTTP/auth contract is tested in `NodeRed-On-Vercel`. Member UI is covered by manual browser smoke in `docs/TESTING.md`. |
+| `TEST_DATABASE_URL` | **Backend repo only.** | The backend's `tests/auth-db.test.js` is skipped without it; agents never invent a connection string. |
+| Cross-origin production | **Separate deployments.** | Backend must set `NODE_RED_FRONTEND_ORIGIN` + `NODE_RED_COOKIE_SAMESITE=None` over HTTPS. Locally the Vite proxy avoids CORS entirely. |
+| Session revocation / rate limiting | **By design / edge concern.** | The self-contained backend token remains valid until `exp` after logout; rotate `NODE_RED_SESSION_SECRET` after a compromise. Add rate limiting at the edge for a public deployment. |
 
 ---
 
@@ -287,15 +287,10 @@ npm run dev
 npm run build
 npm run preview
 
-# Member backend: Node-RED on 1880 (editor at /admin when ENABLE_EDITOR=true)
-# npm scripts load .env automatically via --env-file-if-exists
-# User creates credentials; agent never asks for passwords
-npm run server
-npm run hash-pw
-npm run db:migrate
-npm run seed-user
+# Member backend lives in the separate NodeRed-On-Vercel repo (port 1880).
+# Run `npm run dev` there; this repo proxies /api to it. No .env or DB here.
 
-# Verify the product (after red-team, exactly once before PR): structure + tests + compile
+# Verify the product (after red-team, exactly once before PR): structure + compile + tests
 npm run verify
 
 # Git hygiene

@@ -4,8 +4,9 @@
 
 New user journey added on 2026-11-24. Surfaces: a **Member** button in the home header
 (`src/components/HomeView.vue`), `src/components/MemberView.vue`, `src/components/LoginView.vue`,
-and the Node-RED `httpNodeAuth` handler in `data/auth-middleware.js` / `data/settings.js`.
-The four drill screens are unchanged.
+and `src/api.js`. The login API is implemented in the **separate `NodeRed-On-Vercel` repository**
+(`data/settings.js` → `httpNodeAuth`), not in this frontend-only repository. The four drill screens
+are unchanged.
 
 ## AS IS
 
@@ -23,25 +24,27 @@ Analytics) were open to anyone with the page, and all drill data lived in
    - any other/network failure → shows **"Member service unavailable"** with *Try again* and
      *Back home*. The drill screens keep working.
 3. The form collects email + password and posts `POST /api/login`. A success sets an
-   `HttpOnly` `vd_session` cookie (`SameSite=Lax`, 24 h, `Secure` in production) and returns to
+   `HttpOnly` `nr_session` cookie (always `Secure`, `SameSite=Strict` locally / `None` for
+   cross-origin production, 24 h) and returns to
    step 2. Any failure shows the same generic **"Invalid email or password"** message — it never
    reveals whether the email exists. A double submit is ignored while the first is in flight.
 4. **Log out** posts `POST /api/logout` with `x-requested-with: XMLHttpRequest`, clears the
    cookie and returns to the sign-in form. The button is disabled while the request is in flight.
-5. Credentials are created by the user, not by an agent: `npm run hash-pw` prints a bcrypt hash;
-   the user puts it in `VD_SEED_HASH` along with `VD_SEED_EMAIL`, runs `npm run db:migrate` and
-   `npm run seed-user`. There is no public registration endpoint.
-6. Locally Node-RED listens on `127.0.0.1:1880` and Vite proxies `/api` to it; the editor is
-   opt-in at `/admin`. In production Node-RED serves `dist/` at `/` and `/api` on the **same
-   port**, so a Vercel container needs only one origin. `VD_FRONTEND_ORIGIN` is only needed for a
-   separately hosted frontend. `data/flows.json` is committed and empty; flows stay stateless.
+5. Credentials are created by the user, not by an agent, in the **backend repository**:
+   `npm run hash-pw`, `npm run db:migrate`, `npm run seed-user`. There is no public registration
+   endpoint and no database configuration in this frontend.
+6. Locally the backend listens on `127.0.0.1:1880` and Vite proxies `/api` to it, so the browser
+   sees one origin with no CORS. In production the two deployments are separate origins: the
+   backend sets `NODE_RED_FRONTEND_ORIGIN` and `NODE_RED_COOKIE_SAMESITE=None` over HTTPS. The
+   frontend is built with the public `VITE_API_BASE` (backend origin) so `src/api.js` calls absolute
+   URLs; it contains no backend code and no secrets.
 
 ### AS IS → TO BE summary
 
 | Before | After |
 |---|---|
 | No auth surface at all | Member button + protected page with login/logout |
-| Static SPA only | Static drills + optional Node-RED/Postgres auth backend on one port |
+| Static SPA only | Static drills + login provided by a separate NodeRed-On-Vercel backend |
 | All screens public | Member screen gated; four drill screens stay public and offline |
 
 ## Invariants
