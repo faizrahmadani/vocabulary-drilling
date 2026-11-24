@@ -5,3 +5,8 @@ dist/
 .DS_Store
 .env
 .env.*.local
+# Node-RED runtime artifacts inside the committed userDir
+data/.config.*
+data/lib/
+data/node_modules/
+data/flows_cred.json

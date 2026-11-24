@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /** Creates or updates the single login user. Credentials are supplied by the user. */
-import { newUserId, normalizeEmail } from '../server/auth.js'
-import { createPool } from '../server/db.js'
+import auth from '../data/auth.js'
+import db from '../data/db.js'
+
+const { newUserId, normalizeEmail } = auth
+const { createPool } = db
 
 const url = String(process.env.DATABASE_URL || '')
 const email = normalizeEmail(process.env.VD_SEED_EMAIL || '')

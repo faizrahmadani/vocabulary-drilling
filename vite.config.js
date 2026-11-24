@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       // Same-origin from the browser's point of view: no CORS in local dev.
-      '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:1880', changeOrigin: true },
     },
   },
 })

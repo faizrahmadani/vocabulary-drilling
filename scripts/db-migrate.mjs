@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /** Creates the users table. Run by the user with DATABASE_URL set (e.g. via .env). */
-import { createPool } from '../server/db.js'
+import db from '../data/db.js'
+
+const { createPool } = db
 
 const url = String(process.env.DATABASE_URL || '')
 if (!url.trim()) throw new Error('DATABASE_URL wajib diisi sebelum db:migrate')
